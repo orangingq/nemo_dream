@@ -6,3 +6,6 @@ __pycache__/
 venv/
 .env
 key.json
+val_out/
+outputs/
+raw/
