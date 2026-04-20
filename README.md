@@ -3,57 +3,69 @@
 Files:
 - `example_generated_data.jsonl`: example generated dataset
 - `evaluator.py`: scores each sample on semantic/attribute/cultural/fluency/style axes
-- `visualize_distribution.py`: draws a histogram of final scores and average score bars
+- `visualize_distribution.py`: builds PCA distribution artifacts for data quality analysis
+- `dashboard_server.py`: serves a live dashboard that refreshes when pipeline JSONL files change
 
 Dataset Metadata:
 - Format: JSONL (`project/data/example_generated_data.jsonl`)
-- Sample count: 6
+- Sample count: 20
 - Translation direction: `en -> ko`
-- Domain distribution: `social` 4, `qa` 2
+- Domain distribution: `sns` 8, `workplace` 2, `service_faq` 2, `customer_support` 2, `developer_qna` 2, `community_qna` 1, `education` 1, `travel` 1, `commerce` 1
 
 Per-sample schema:
 ```json
 {
-  "sample_id": "sample_001",
-  "domain": "social | qa",
-  "source_language": "en",
-  "target_language": "ko",
-  "source_text": "original English text",
-  "metadata": {
-    "speech_act": "complaint | sarcasm | question",
-    "register": "casual | public | intimate | formal",
-    "emotion": {
-      "type": "frustration | annoyance | neutral | shock | sadness",
-      "intensity": "1-5"
+  "messages": [
+    {
+      "role": "system",
+      "content": "You rewrite English inputs into natural Korean text that matches Korean social and cultural context."
     },
-    "age_group": "20s | 30s",
-    "platform": "twitter | reddit | community | linkedin | instagram_story | faq",
-    "cultural_refs": ["source-side cultural expressions"],
-    "internet_markers": {
-      "laughter": "lol | none",
-      "sarcasm_marker": "true | false"
+    {
+      "role": "user",
+      "content": "original english text"
+    },
+    {
+      "role": "assistant",
+      "content": "final polished korean text"
     }
-  },
-  "cultural_mapping": {
-    "source reference": "localized Korean reference"
-  },
-  "rewritten_text": "localized Korean output",
-  "generation_notes": "notes about generation/localization choices"
+  ],
+  "metadata": {
+    "source_id": "sns-001",
+    "domain": "sns",
+    "target_platform": "twitter",
+    "target_age_group": "20s",
+    "target_community": "campus",
+    "target_gender_style": "neutral",
+    "quality_score": {
+      "meaning_preservation": {"score": 4},
+      "korean_naturalness": {"score": 5},
+      "cultural_grounding": {"score": 4}
+    }
+  }
 }
 ```
 
 Metadata summary:
-- `speech_act`: complaint 3, question 2, sarcasm 1
-- `register`: casual 2, public 2, intimate 1, formal 1
-- `age_group`: 20s 4, 30s 2
-- `platform`: twitter / reddit / community / linkedin / instagram_story / faq each 1
-- `emotion.type`: neutral 2, frustration 1, annoyance 1, shock 1, sadness 1
-- `emotion.intensity`: 1(2), 3(1), 4(2), 5(1)
-- `internet_markers.sarcasm_marker`: false 5, true 1
-- Average number of `cultural_refs` per sample: 1.5
+- `target_platform`: twitter 5, community 4, instagram_story 3, faq 2, threads/naver_cafe/linkedin/support_chat/work_chat/support_ticket each 1
+- `target_age_group`: 20s 13, 30s 5, 10s 1, 40s 1
+- Average quality score: 4.5167 / 5
+- Dashboard projection: all keys under `metadata.quality_score` are treated as a quality vector, then reduced to 2D/3D with PCA.
 
 Run:
 ```bash
-python evaluator.py --input example_generated_data.jsonl --output evaluated_data.jsonl
-python visualize_distribution.py --input evaluated_data.jsonl --output score_distribution.png
+python evaluator.py --input data/example_generated_data.jsonl --output data/evaluated_data.jsonl --mode heuristic
+python visualize_distribution.py --generated data/example_generated_data.jsonl --evaluated data/evaluated_data.jsonl
+python dashboard_server.py --generated data/example_generated_data.jsonl --evaluated data/evaluated_data.jsonl --reference data/raw/sample_chat_en.jsonl
 ```
+
+Visualization outputs:
+- `artifacts/distribution_viz/distribution_dashboard.html`: interactive 2D/3D PCA quality dashboard
+- `artifacts/distribution_viz/distribution_pca_2d.png`: static 2D PCA map
+- `artifacts/distribution_viz/distribution_pca_3d.png`: static 3D PCA map
+- `artifacts/distribution_viz/distribution_summary.json`: distribution and score summary
+
+Live dashboard:
+- Default URL: `http://127.0.0.1:8765`
+- The browser polls `/api/payload` and redraws the dashboard when `generated`, `evaluated`, or `reference` JSONL files change.
+- The graph axes are PCA components from `metadata.quality_score`, so additional quality score dimensions can be added without changing the dashboard layout.
+- If the default port is busy, run with `--port 8766`.

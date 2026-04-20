@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dataset Quality Distribution Dashboard</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d9e1ec;
+      --accent: #155eef;
+      --danger: #d92d20;
+      --good: #039855;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .shell {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+      align-items: end;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .kpi, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(16, 24, 40, 0.06);
+    }
+    .kpi {
+      padding: 12px;
+      min-height: 82px;
+    }
+    .kpi span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kpi strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 22px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .panel {
+      padding: 14px;
+    }
+    .viz-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .mode-group, .control-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.active, button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    canvas {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .timeline {
+      display: grid;
+      grid-template-columns: auto 1fr 86px 130px;
+      gap: 12px;
+      align-items: center;
+      margin-top: 12px;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      background: #fff;
+    }
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .side-title {
+      margin: 4px 0 8px;
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .metric-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #edf1f6;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .metric-row strong {
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .tooltip {
+      min-height: 180px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .tooltip strong {
+      color: var(--ink);
+    }
+    .muted {
+      color: var(--muted);
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .table th, .table td {
+      text-align: left;
+      padding: 7px 4px;
+      border-bottom: 1px solid #edf1f6;
+      vertical-align: top;
+    }
+    .table th {
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .bars {
+      display: grid;
+      gap: 6px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 28px;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .bar-track {
+      height: 8px;
+      border-radius: 99px;
+      background: #eef2f7;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: #155eef;
+    }
+    @media (max-width: 1100px) {
+      .topbar, .grid { grid-template-columns: 1fr; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .timeline { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div>
+        <h1>데이터 품질 분포 대시보드</h1>
+        <p>생성 데이터셋이 얼마나 고르게 퍼져 있는지, 원본 데이터셋과 어느 정도 다른지, 그리고 source → metadata → generated → evaluated 단계에서 각 샘플 위치가 어떻게 움직이는지 보여줍니다. metadata quality_score 벡터를 PCA로 2D/3D 차원 축소해 표시합니다.</p>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span>생성 샘플</span><strong id="sampleCount"></strong></div>
+        <div class="kpi"><span>평균 Final Score</span><strong id="meanScore"></strong></div>
+        <div class="kpi"><span>원본→평가 분포 차이</span><strong id="refGap"></strong></div>
+        <div class="kpi"><span>공간 균일도</span><strong id="evenness"></strong></div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="viz-head">
+          <div>
+            <div class="side-title">Quality Score PCA Space</div>
+            <p class="muted">quality_score 항목이 늘어나도 PC1/PC2/PC3로 축소해서 보여줍니다.</p>
+          </div>
+          <div class="mode-group">
+            <button id="mode2d" class="active">2D</button>
+            <button id="mode3d">3D</button>
+            <button id="playButton" class="primary">Play</button>
+          </div>
+        </div>
+        <canvas id="chart" width="1100" height="690"></canvas>
+        <div class="timeline">
+          <input id="stageSlider" type="range" min="0" max="3.25" step="0.005" value="0">
+          <div class="control-row">
+            <span class="muted">속도</span>
+            <input id="speedSlider" type="range" min="0.4" max="2.4" step="0.1" value="1">
+          </div>
+          <strong id="stageText">Source</strong>
+          <span class="muted" id="visibleText"></span>
+        </div>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <aside class="panel">
+        <div class="side-title">분포 진단</div>
+        <div class="metric-list">
+          <div class="metric-row"><span>PCA 설명 분산</span><strong id="varianceText"></strong></div>
+          <div class="metric-row"><span>도메인 균일도</span><strong id="domainEvenness"></strong></div>
+          <div class="metric-row"><span>플랫폼 균일도</span><strong id="platformEvenness"></strong></div>
+          <div class="metric-row"><span>생성 분포 spread</span><strong id="spreadText"></strong></div>
+          <div class="metric-row"><span>낮은 품질 샘플</span><strong id="lowQuality"></strong></div>
+        </div>
+
+        <div class="side-title">샘플 상세</div>
+        <div class="tooltip" id="tooltip">
+          <strong>포인트에 마우스를 올려보세요.</strong>
+          <div class="muted">샘플 ID, 점수, 도메인, 원문/생성문을 확인할 수 있습니다.</div>
+        </div>
+
+        <div class="side-title">도메인 분포</div>
+        <div class="bars" id="domainBars"></div>
+
+        <div class="side-title">개선 우선 후보</div>
+        <table class="table">
+          <thead><tr><th>ID</th><th>Score</th><th>Domain</th><th>Output</th></tr></thead>
+          <tbody id="lowestTable"></tbody>
+        </table>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const payload = {"stageOrder": ["source", "metadata", "generated", "evaluated"], "stageLabels": {"source": "Source", "metadata": "Metadata", "generated": "Generated", "evaluated": "Evaluated"}, "stageColors": {"source": "#2F6FED", "metadata": "#00A878", "generated": "#F59E0B", "evaluated": "#E11D48"}, "referenceColor": "#667085", "bounds": {"minX": -3.98964044, "maxX": 4.5886634399999995, "minY": -1.21491624, "maxY": 1.4717322400000001, "minZ": -0.738355, "maxZ": 0.807162}, "summary": {"sample_count": 20, "reference_count": 5, "quality_score_keys": ["cultural_grounding", "korean_naturalness", "meaning_preservation"], "quality_score_labels": {"cultural_grounding": "Cultural Grounding", "korean_naturalness": "Korean Naturalness", "meaning_preservation": "Meaning Preservation"}, "mean_final_score": 4.5167, "min_final_score": 4.0, "max_final_score": 5.0, "score_std": 0.3245, "low_quality_count": 0, "domain_evenness": 0.8587, "platform_evenness": 0.9042, "spatial_evenness": 0.0, "generated_spread": 0.9575, "reference_spread": 0.0, "explained_variance_ratio": [0.9514, 0.0378, 0.0108], "stage_centroids": {"source": [-3.1595, -0.0491, 0.0082], "metadata": [-0.4129, -0.0064, 0.0011], "generated": [1.4182, 0.022, -0.0037], "evaluated": [2.9441, 0.0457, -0.0076]}, "reference_centroid": [-3.1595, -0.0491, 0.0082], "centroid_shift": {"source_to_metadata": 2.7469, "metadata_to_generated": 1.8313, "generated_to_evaluated": 1.5261, "reference_to_source": 0.0, "reference_to_generated": 4.5782, "reference_to_evaluated": 6.1043}, "domain_distribution": {"sns": 8, "community_qna": 1, "workplace": 2, "service_faq": 2, "customer_support": 2, "education": 1, "travel": 1, "commerce": 1, "developer_qna": 2}, "platform_distribution": {"twitter": 5, "threads": 1, "naver_cafe": 1, "linkedin": 1, "instagram_story": 3, "faq": 2, "support_chat": 1, "community": 4, "work_chat": 1, "support_ticket": 1}, "speech_act_distribution": {"unknown": 20}, "lowest_samples": [{"id": "dev-001", "score": 4.0, "domain": "developer_qna", "platform": "community", "text": "파이썬에서 리스트 인덱스 범위 초과 오류가 뜨는 이유가 뭐예요?"}, {"id": "support-002", "score": 4.0, "domain": "customer_support", "platform": "support_ticket", "text": "환불 처리되었다고 안내받았는데 아직 카드 명세서에 반영되지 않았습니다."}, {"id": "dev-002", "score": 4.0, "domain": "developer_qna", "platform": "community", "text": "변경 내용은 그대로 두고 마지막 git 커밋만 취소하려면 어떻게 해야 하나요?"}, {"id": "sns-001", "score": 4.3333, "domain": "sns", "platform": "twitter", "text": "아 또 야근 때문에 병원 예약 변경함 ㅠㅠ 진짜 일정 맞추기 너무 어렵다"}, {"id": "work-001", "score": 4.3333, "domain": "workplace", "platform": "linkedin", "text": "명절 연휴 직전에 구조조정 공지를 내다니 정말 믿기 어렵네요. 구성원 배려가 너무 부족합니다."}, {"id": "support-001", "score": 4.3333, "domain": "customer_support", "platform": "support_chat", "text": "실수로 삭제한 공유 폴더를 다시 복원할 수 있나요?"}]}, "points": [{"id": "sns-001", "order": 0, "domain": "sns", "platform": "twitter", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "lol I had to reschedule my doctor's appointment again because work ran late.", "rewrittenText": "아 또 야근 때문에 병원 예약 변경함 ㅠㅠ 진짜 일정 맞추기 너무 어렵다", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.548795, -0.137376, -0.239832], "generated": [1.191663, -0.19623, -0.405188], "evaluated": [2.642045, -0.245274, -0.542985]}}, {"id": "sns-002", "order": 1, "domain": "sns", "platform": "threads", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "My roommate ate my leftovers again. Amazing.", "rewrittenText": "룸메가 또 내가 남겨둔 거 먹었네 와 진짜 대단하다 ㅋㅋ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.307371, -0.456716, -0.034317], "generated": [1.594037, -0.728463, -0.062663], "evaluated": [3.178543, -0.954918, -0.086285]}}, {"id": "community-001", "order": 2, "domain": "community_qna", "platform": "naver_cafe", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 5.0, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 5.0}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "How do I split a dinner bill with friends quickly?", "rewrittenText": "친구들이랑 밥 먹고 더치페이할 때 제일 빨리 정산하는 방법 뭐예요? 토스로 보내면 되나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.046388, -0.140288, 0.150781], "generated": [2.029009, -0.201083, 0.245833], "evaluated": [3.758505, -0.251745, 0.325044]}}, {"id": "work-001", "order": 3, "domain": "workplace", "platform": "linkedin", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0}, "sourceText": "I can't believe they announced layoffs right before the holidays.", "rewrittenText": "명절 연휴 직전에 구조조정 공지를 내다니 정말 믿기 어렵네요. 구성원 배려가 너무 부족합니다.", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.563678, 0.198938, 0.300234], "generated": [1.166858, 0.364293, 0.494922], "evaluated": [2.608971, 0.50209, 0.657162]}}, {"id": "sns-003", "order": 4, "domain": "sns", "platform": "instagram_story", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "brb crying because my train got delayed for the third time this week", "rewrittenText": "이번 주만 세 번째 지하철 지연… 진짜 울고 싶다ㅠ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.307371, -0.456716, -0.034317], "generated": [1.594037, -0.728463, -0.062663], "evaluated": [3.178543, -0.954918, -0.086285]}}, {"id": "faq-001", "order": 5, "domain": "service_faq", "platform": "faq", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "Can I change my clinic reservation online or do I need to call?", "rewrittenText": "병원 예약 변경은 온라인으로 가능한가요, 아니면 전화로만 해야 하나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.287812, 0.179052, -0.054734], "generated": [1.626635, 0.33115, -0.096691], "evaluated": [3.222007, 0.457899, -0.131656]}}, {"id": "sns-004", "order": 6, "domain": "sns", "platform": "twitter", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 5.0, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 5.0}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "The delivery app said my food arrived, but nothing is outside my door.", "rewrittenText": "배달 앱에는 도착했다고 뜨는데 현관 앞에 아무것도 없음… 이거 어디 간 거지ㅠ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.046388, -0.140288, 0.150781], "generated": [2.029009, -0.201083, 0.245833], "evaluated": [3.758505, -0.251745, 0.325044]}}, {"id": "support-001", "order": 7, "domain": "customer_support", "platform": "support_chat", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 3.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 3.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "I accidentally deleted a shared folder. Can I restore it?", "rewrittenText": "실수로 삭제한 공유 폴더를 다시 복원할 수 있나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.529236, 0.498392, -0.260249], "generated": [1.224261, 0.863383, -0.439216], "evaluated": [2.685508, 1.167543, -0.588355]}}, {"id": "edu-001", "order": 8, "domain": "education", "platform": "community", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0}, "sourceText": "Explain overfitting like I'm a high school student.", "rewrittenText": "고등학생도 이해할 수 있게 과적합이 뭔지 쉽게 설명해 주세요.", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.563678, 0.198938, 0.300234], "generated": [1.166858, 0.364293, 0.494922], "evaluated": [2.608971, 0.50209, 0.657162]}}, {"id": "travel-001", "order": 9, "domain": "travel", "platform": "community", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 5.0, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 5.0}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "Do I need to reserve a seat for the airport bus in advance?", "rewrittenText": "공항버스는 미리 좌석 예약을 해야 하나요, 아니면 현장에서 바로 탈 수 있나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.046388, -0.140288, 0.150781], "generated": [2.029009, -0.201083, 0.245833], "evaluated": [3.758505, -0.251745, 0.325044]}}, {"id": "sns-005", "order": 10, "domain": "sns", "platform": "instagram_story", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "The cafe was so crowded that I had to take my latte to go.", "rewrittenText": "카페 자리 없어서 결국 라떼 테이크아웃함… 앉아서 쉬려고 했는데 아쉽다", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.548795, -0.137376, -0.239832], "generated": [1.191663, -0.19623, -0.405188], "evaluated": [2.642045, -0.245274, -0.542985]}}, {"id": "work-002", "order": 11, "domain": "workplace", "platform": "work_chat", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 3.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 3.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "Could you move our meeting to after lunch?", "rewrittenText": "혹시 오늘 회의를 점심 이후로 옮길 수 있을까요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.529236, 0.498392, -0.260249], "generated": [1.224261, 0.863383, -0.439216], "evaluated": [2.685508, 1.167543, -0.588355]}}, {"id": "commerce-001", "order": 12, "domain": "commerce", "platform": "twitter", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "The coupon expired yesterday and now the price doubled. Great timing.", "rewrittenText": "쿠폰 어제 끝났는데 오늘 보니까 가격이 두 배네 와 타이밍 진짜 좋다 ㅋㅋ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.287812, 0.179052, -0.054734], "generated": [1.626635, 0.33115, -0.096691], "evaluated": [3.222007, 0.457899, -0.131656]}}, {"id": "sns-006", "order": 13, "domain": "sns", "platform": "twitter", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "I finally got tickets for the concert after refreshing for an hour.", "rewrittenText": "한 시간 동안 새로고침하다가 드디어 콘서트 티켓 잡았다ㅠㅠ 진짜 손 떨림", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.307371, -0.456716, -0.034317], "generated": [1.594037, -0.728463, -0.062663], "evaluated": [3.178543, -0.954918, -0.086285]}}, {"id": "dev-001", "order": 14, "domain": "developer_qna", "platform": "community", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.0, "scores": {"cultural_grounding": 3.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0, "final": 4.0}, "qualityVector": {"cultural_grounding": 3.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0}, "sourceText": "Why does my Python script say list index out of range?", "rewrittenText": "파이썬에서 리스트 인덱스 범위 초과 오류가 뜨는 이유가 뭐예요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.805102, 0.518278, 0.094719], "generated": [0.764484, 0.896527, 0.152398], "evaluated": [2.072472, 1.211734, 0.200463]}}, {"id": "support-002", "order": 15, "domain": "customer_support", "platform": "support_ticket", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.0, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 4.0, "final": 4.0}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 4.0, "meaning_preservation": 4.0}, "sourceText": "The refund still has not appeared on my card statement.", "rewrittenText": "환불 처리되었다고 안내받았는데 아직 카드 명세서에 반영되지 않았습니다.", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.824661, -0.11749, 0.115136], "generated": [0.731886, -0.163086, 0.186426], "evaluated": [2.029009, -0.201083, 0.245833]}}, {"id": "sns-007", "order": 16, "domain": "sns", "platform": "twitter", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.3333, "scores": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.3333}, "qualityVector": {"cultural_grounding": 4.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "My phone battery died right when the taxi arrived.", "rewrittenText": "택시 도착하자마자 휴대폰 배터리 나감… 진짜 순간 식은땀 났다ㅠ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.548795, -0.137376, -0.239832], "generated": [1.191663, -0.19623, -0.405188], "evaluated": [2.642045, -0.245274, -0.542985]}}, {"id": "faq-002", "order": 17, "domain": "service_faq", "platform": "faq", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 5.0, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0, "final": 5.0}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 5.0}, "sourceText": "Can I use a mobile ID instead of my physical ID card?", "rewrittenText": "실물 신분증 대신 모바일 신분증을 사용할 수 있나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.046388, -0.140288, 0.150781], "generated": [2.029009, -0.201083, 0.245833], "evaluated": [3.758505, -0.251745, 0.325044]}}, {"id": "sns-008", "order": 18, "domain": "sns", "platform": "instagram_story", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.6667, "scores": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0, "final": 4.6667}, "qualityVector": {"cultural_grounding": 5.0, "korean_naturalness": 5.0, "meaning_preservation": 4.0}, "sourceText": "I studied all night and still blanked during the quiz.", "rewrittenText": "밤새 공부했는데 쪽지시험 보자마자 머리 하얘짐… 진짜 억울해ㅠ", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.307371, -0.456716, -0.034317], "generated": [1.594037, -0.728463, -0.062663], "evaluated": [3.178543, -0.954918, -0.086285]}}, {"id": "dev-002", "order": 19, "domain": "developer_qna", "platform": "community", "speechAct": "unknown", "register": "unknown", "emotion": "unknown", "finalScore": 4.0, "scores": {"cultural_grounding": 3.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0, "final": 4.0}, "qualityVector": {"cultural_grounding": 3.0, "korean_naturalness": 4.0, "meaning_preservation": 5.0}, "sourceText": "How do I undo the last git commit but keep my changes?", "rewrittenText": "변경 내용은 그대로 두고 마지막 git 커밋만 취소하려면 어떻게 해야 하나요?", "coords": {"source": [-3.159482, -0.049096, 0.008202], "metadata": [-0.805102, 0.518278, 0.094719], "generated": [0.764484, 0.896527, 0.152398], "evaluated": [2.072472, 1.211734, 0.200463]}}], "reference": [{"id": "sample-001", "order": 0, "domain": "customer-support", "sourceText": "You are a helpful assistant for a cloud storage service.\nI accidentally deleted a folder. Can I recover it?\nYes. Open the Trash section, find the folder, and choose Restore. If it ", "coords": [-3.159482, -0.049096, 0.008202]}, {"id": "sample-002", "order": 1, "domain": "study-help", "sourceText": "You are a patient study coach.\nExplain overfitting in simple terms.\nOverfitting happens when a model memorizes training examples too closely and fails to generalize to new data. It", "coords": [-3.159482, -0.049096, 0.008202]}, {"id": "sample-003", "order": 2, "domain": "coding", "sourceText": "You help beginners debug Python code.\nWhy does my Python script say list index out of range?\nThat error means your code is trying to access an element position that does not exist.", "coords": [-3.159482, -0.049096, 0.008202]}, {"id": "sample-004", "order": 3, "domain": "travel", "sourceText": "You are a practical travel planner.\nWhat should I pack for a three-day trip to Tokyo in spring?\nPack light layers, a compact umbrella, comfortable walking shoes, a power adapter if", "coords": [-3.159482, -0.049096, 0.008202]}, {"id": "sample-005", "order": 4, "domain": "health-education", "sourceText": "You provide general wellness information and avoid diagnosis.\nWhat are easy ways to drink more water during the day?\nKeep a water bottle nearby, drink a glass after waking up, pair", "coords": [-3.159482, -0.049096, 0.008202]}]};
+    const canvas = document.getElementById("chart");
+    const ctx = canvas.getContext("2d");
+    const slider = document.getElementById("stageSlider");
+    const speedSlider = document.getElementById("speedSlider");
+    const playButton = document.getElementById("playButton");
+    const mode2d = document.getElementById("mode2d");
+    const mode3d = document.getElementById("mode3d");
+    const stageText = document.getElementById("stageText");
+    const visibleText = document.getElementById("visibleText");
+    const tooltip = document.getElementById("tooltip");
+    const stages = payload.stageOrder;
+    let mode = "2d";
+    let playing = false;
+    let rafId = null;
+    let lastTimestamp = 0;
+    let rotation = 0.62;
+    let hovered = null;
+    let mouse = null;
+
+    const summary = payload.summary;
+    document.getElementById("sampleCount").textContent = summary.sample_count;
+    document.getElementById("meanScore").textContent = summary.mean_final_score.toFixed(3);
+    document.getElementById("refGap").textContent = summary.centroid_shift.reference_to_evaluated.toFixed(3);
+    document.getElementById("evenness").textContent = Math.round(summary.spatial_evenness * 100) + "%";
+    document.getElementById("varianceText").textContent = summary.explained_variance_ratio.map(v => Math.round(v * 100) + "%").join(" / ");
+    document.getElementById("domainEvenness").textContent = Math.round(summary.domain_evenness * 100) + "%";
+    document.getElementById("platformEvenness").textContent = Math.round(summary.platform_evenness * 100) + "%";
+    document.getElementById("spreadText").textContent = summary.generated_spread.toFixed(3);
+    document.getElementById("lowQuality").textContent = `${summary.low_quality_count} / ${summary.sample_count}`;
+
+    document.getElementById("legend").innerHTML = stages.map(stage => (
+      `<span class="chip"><span class="swatch" style="background:${payload.stageColors[stage]}"></span>${payload.stageLabels[stage]}</span>`
+    )).join("") + `<span class="chip"><span class="swatch" style="background:${payload.referenceColor}"></span>Reference</span><span class="chip">Fill color = avg quality score</span>`;
+
+    const domainMax = Math.max(...Object.values(summary.domain_distribution));
+    document.getElementById("domainBars").innerHTML = Object.entries(summary.domain_distribution)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => `<div class="bar-row"><span>${name}</span><div class="bar-track"><div class="bar-fill" style="width:${(count / domainMax) * 100}%"></div></div><strong>${count}</strong></div>`)
+      .join("");
+
+    document.getElementById("lowestTable").innerHTML = summary.lowest_samples.map(row => (
+      `<tr><td>${row.id}</td><td>${row.score.toFixed(3)}</td><td>${row.domain}</td><td>${row.text}</td></tr>`
+    )).join("");
+
+    function clampValue(value, low, high) {
+      return Math.max(low, Math.min(high, value));
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function scoreColor(score) {
+      const t = clampValue((score - 1) / 4, 0, 1);
+      const r = Math.round(217 + (3 - 217) * t);
+      const g = Math.round(45 + (152 - 45) * t);
+      const b = Math.round(32 + (85 - 32) * t);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    function localStageValue(point, value) {
+      const delay = point.order * 0.018;
+      return clampValue(value - delay, -0.2, 3);
+    }
+
+    function interpolate(point, value) {
+      const local = localStageValue(point, value);
+      if (local < 0) {
+        return null;
+      }
+      const leftIndex = Math.floor(local);
+      const rightIndex = Math.min(stages.length - 1, leftIndex + 1);
+      const mix = local - leftIndex;
+      const leftStage = stages[leftIndex];
+      const rightStage = stages[rightIndex];
+      const left = point.coords[leftStage];
+      const right = point.coords[rightStage];
+      return {
+        x: lerp(left[0], right[0], mix),
+        y: lerp(left[1], right[1], mix),
+        z: lerp(left[2], right[2], mix),
+        stage: mix < 0.5 ? leftStage : rightStage,
+        opacity: clampValue(local / 0.25, 0.1, 1),
+      };
+    }
+
+    function norm(value, min, max) {
+      return (value - min) / Math.max(max - min, 1e-6);
+    }
+
+    function project2d(coord) {
+      const padX = 72;
+      const padY = 58;
+      return {
+        x: padX + norm(coord.x, payload.bounds.minX, payload.bounds.maxX) * (canvas.width - padX * 2),
+        y: canvas.height - padY - norm(coord.y, payload.bounds.minY, payload.bounds.maxY) * (canvas.height - padY * 2),
+        scale: 1,
+      };
+    }
+
+    function project3d(coord) {
+      const cx = (payload.bounds.minX + payload.bounds.maxX) / 2;
+      const cy = (payload.bounds.minY + payload.bounds.maxY) / 2;
+      const cz = (payload.bounds.minZ + payload.bounds.maxZ) / 2;
+      const x = coord.x - cx;
+      const y = coord.y - cy;
+      const z = coord.z - cz;
+      const cos = Math.cos(rotation);
+      const sin = Math.sin(rotation);
+      const rx = x * cos - z * sin;
+      const rz = x * sin + z * cos;
+      const ry = y * Math.cos(0.58) - rz * Math.sin(0.58);
+      const depth = y * Math.sin(0.58) + rz * Math.cos(0.58);
+      const span = Math.max(payload.bounds.maxX - payload.bounds.minX, payload.bounds.maxY - payload.bounds.minY, payload.bounds.maxZ - payload.bounds.minZ);
+      const perspective = 1 / (1 + depth / (span * 2.8));
+      const scale = Math.min(canvas.width, canvas.height) * 0.58 / Math.max(span, 1e-6);
+      return {
+        x: canvas.width / 2 + rx * scale * perspective,
+        y: canvas.height / 2 - ry * scale * perspective,
+        scale: perspective,
+        depth,
+      };
+    }
+
+    function project(coord) {
+      return mode === "3d" ? project3d(coord) : project2d(coord);
+    }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fbfdff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#e5ebf3";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 6; i += 1) {
+        const x = 72 + ((canvas.width - 144) / 6) * i;
+        const y = 58 + ((canvas.height - 116) / 6) * i;
+        ctx.beginPath();
+        ctx.moveTo(x, 58);
+        ctx.lineTo(x, canvas.height - 58);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(72, y);
+        ctx.lineTo(canvas.width - 72, y);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#667085";
+      ctx.font = "13px Inter, sans-serif";
+      ctx.fillText(mode === "3d" ? "Quality Score PC1 / PC2 / PC3" : "Quality Score PC1", 24, 28);
+      ctx.fillText(mode === "3d" ? "drag = rotate" : "Quality Score PC2", canvas.width - 148, canvas.height - 24);
+    }
+
+    function drawReference() {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = payload.referenceColor;
+      ctx.lineWidth = 1.3;
+      payload.reference.forEach(point => {
+        const projected = project({x: point.coords[0], y: point.coords[1], z: point.coords[2]});
+        ctx.beginPath();
+        ctx.moveTo(projected.x - 5, projected.y - 5);
+        ctx.lineTo(projected.x + 5, projected.y + 5);
+        ctx.moveTo(projected.x + 5, projected.y - 5);
+        ctx.lineTo(projected.x - 5, projected.y + 5);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function drawPaths(value) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(71, 84, 103, 0.16)";
+      ctx.lineWidth = 1;
+      payload.points.forEach(point => {
+        if (localStageValue(point, value) < 0.2) return;
+        ctx.beginPath();
+        stages.forEach((stage, index) => {
+          const coord = point.coords[stage];
+          const p = project({x: coord[0], y: coord[1], z: coord[2]});
+          if (index === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function drawCentroids(value) {
+      const stageIndex = Math.min(3, Math.round(value));
+      ctx.save();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(17, 24, 39, 0.58)";
+      ctx.beginPath();
+      stages.forEach((stage, index) => {
+        const coord = summary.stage_centroids[stage];
+        const p = project({x: coord[0], y: coord[1], z: coord[2]});
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.stroke();
+      stages.forEach((stage, index) => {
+        const coord = summary.stage_centroids[stage];
+        const p = project({x: coord[0], y: coord[1], z: coord[2]});
+        ctx.globalAlpha = index <= stageIndex ? 1 : 0.35;
+        ctx.fillStyle = payload.stageColors[stage];
+        ctx.strokeStyle = "#111827";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    function drawPoints(value) {
+      hovered = null;
+      const drawable = [];
+      payload.points.forEach(point => {
+        const coord = interpolate(point, value);
+        if (!coord) return;
+        const projected = project(coord);
+        drawable.push({point, coord, projected});
+      });
+      drawable.sort((a, b) => (a.projected.depth || 0) - (b.projected.depth || 0));
+      drawable.forEach(item => {
+        const radius = (6 + (item.point.finalScore / 5) * 4) * item.projected.scale;
+        ctx.save();
+        ctx.globalAlpha = item.coord.opacity;
+        ctx.fillStyle = scoreColor(item.point.finalScore);
+        ctx.strokeStyle = payload.stageColors[item.coord.stage];
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(item.projected.x, item.projected.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        if (mouse) {
+          const hit = Math.hypot(mouse.x - item.projected.x, mouse.y - item.projected.y);
+          if (hit <= radius + 4 && (!hovered || hit < hovered.hit)) {
+            hovered = {...item, hit};
+          }
+        }
+      });
+      visibleText.textContent = `${drawable.length} / ${payload.points.length} visible`;
+    }
+
+    function renderTooltip() {
+      if (!hovered) {
+        tooltip.innerHTML = '<strong>포인트에 마우스를 올려보세요.</strong><div class="muted">샘플 ID, 점수, 도메인, 원문/생성문을 확인할 수 있습니다.</div>';
+        return;
+      }
+      const p = hovered.point;
+      const qualityRows = Object.entries(p.scores)
+        .filter(([key]) => key !== "final")
+        .map(([key, value]) => `${key.replaceAll("_", " ")} ${Number(value).toFixed(0)}`)
+        .join(" · ");
+      tooltip.innerHTML = `
+        <strong>${p.id}</strong>
+        <div class="muted">${p.domain} · ${p.platform} · ${p.speechAct} · ${p.register}</div>
+        <div style="margin-top:8px;">Avg <strong>${p.finalScore.toFixed(2)}</strong> · ${qualityRows}</div>
+        <div style="margin-top:10px;"><strong>Source</strong><br><span class="muted">${p.sourceText}</span></div>
+        <div style="margin-top:10px;"><strong>Korean Output</strong><br><span class="muted">${p.rewrittenText}</span></div>
+      `;
+    }
+
+    function render() {
+      const value = parseFloat(slider.value);
+      if (mode === "3d" && playing) rotation += 0.0035;
+      drawGrid();
+      drawReference();
+      drawPaths(value);
+      drawCentroids(value);
+      drawPoints(value);
+      const stageIndex = Math.min(3, Math.max(0, Math.round(value)));
+      stageText.textContent = payload.stageLabels[stages[stageIndex]];
+      renderTooltip();
+    }
+
+    function animate(timestamp) {
+      if (!playing) return;
+      if (!lastTimestamp) lastTimestamp = timestamp;
+      const delta = timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+      let next = parseFloat(slider.value) + delta * 0.00034 * parseFloat(speedSlider.value);
+      if (next > parseFloat(slider.max)) next = 0;
+      slider.value = next.toFixed(3);
+      render();
+      rafId = requestAnimationFrame(animate);
+    }
+
+    playButton.addEventListener("click", () => {
+      playing = !playing;
+      playButton.textContent = playing ? "Pause" : "Play";
+      lastTimestamp = 0;
+      if (playing) rafId = requestAnimationFrame(animate);
+      else if (rafId) cancelAnimationFrame(rafId);
+      render();
+    });
+    slider.addEventListener("input", render);
+    speedSlider.addEventListener("input", render);
+    mode2d.addEventListener("click", () => {
+      mode = "2d";
+      mode2d.classList.add("active");
+      mode3d.classList.remove("active");
+      render();
+    });
+    mode3d.addEventListener("click", () => {
+      mode = "3d";
+      mode3d.classList.add("active");
+      mode2d.classList.remove("active");
+      render();
+    });
+
+    let dragging = false;
+    let lastX = 0;
+    canvas.addEventListener("mousemove", event => {
+      const rect = canvas.getBoundingClientRect();
+      mouse = {
+        x: (event.clientX - rect.left) * (canvas.width / rect.width),
+        y: (event.clientY - rect.top) * (canvas.height / rect.height),
+      };
+      if (dragging && mode === "3d") {
+        rotation += (mouse.x - lastX) * 0.006;
+        lastX = mouse.x;
+      }
+      render();
+    });
+    canvas.addEventListener("mousedown", event => {
+      dragging = true;
+      const rect = canvas.getBoundingClientRect();
+      lastX = (event.clientX - rect.left) * (canvas.width / rect.width);
+    });
+    window.addEventListener("mouseup", () => { dragging = false; });
+    canvas.addEventListener("mouseleave", () => {
+      mouse = null;
+      dragging = false;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

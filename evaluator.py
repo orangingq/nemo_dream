@@ -12,7 +12,43 @@ from config import load_env_from_key_json
 from util import load_jsonl
 from openai import OpenAI
 
-POSITIVE_CULTURAL_HINTS = ["병원", "예약", "토스", "더치페이", "명절", "지하철", "룸메", "야근"]
+POSITIVE_CULTURAL_HINTS = [
+    "병원",
+    "예약",
+    "토스",
+    "더치페이",
+    "명절",
+    "지하철",
+    "룸메",
+    "야근",
+    "배달 앱",
+    "현관",
+    "공유 폴더",
+    "복원",
+    "공항버스",
+    "회의",
+    "회의록",
+    "구독",
+    "모바일 신분증",
+    "카드 명세서",
+    "스터디룸",
+    "어깨",
+    "지도 앱",
+    "콘서트 티켓",
+    "고등학생",
+    "과적합",
+    "물",
+    "쿠폰",
+    "가격",
+    "파이썬",
+    "택시",
+    "사이즈표",
+    "후드티",
+    "약속 시간",
+    "자리 지키",
+    "git 커밋",
+    "변경 내용",
+]
 INFORMAL_MARKERS = ["ㅋㅋ", "ㅠ", "ㅎㅎ", "진짜", "또", "와"]
 FORMAL_ENDINGS = ["니다", "까요", "요?"]
 RESIDUAL_ENGLISH_PATTERN = re.compile(r"[A-Za-z]{4,}")

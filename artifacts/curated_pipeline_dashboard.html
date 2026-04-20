@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Curated Pipeline Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; background: #f6f8fb; color: #172033; }
+    main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 29px; }
+    p { margin: 0; color: #667085; line-height: 1.45; }
+    .layout { display: grid; grid-template-columns: 380px 1fr; gap: 16px; margin-top: 18px; }
+    .panel, .card { background: #fff; border: 1px solid #d9e1ec; border-radius: 8px; box-shadow: 0 10px 28px rgba(16, 24, 40, 0.06); }
+    .panel { padding: 14px; }
+    .timeline { display: grid; gap: 10px; }
+    .card { padding: 12px; }
+    .card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .metric { display: inline-flex; margin: 8px 8px 0 0; padding: 5px 8px; border-radius: 8px; background: #eef4ff; color: #155eef; font-size: 12px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    button { min-height: 36px; border: 1px solid #d9e1ec; border-radius: 8px; background: #fff; padding: 0 12px; font-weight: 800; cursor: pointer; }
+    button.active { background: #155eef; border-color: #155eef; color: #fff; }
+    .path-note { min-height: 20px; margin: -4px 0 10px; font-size: 12px; color: #667085; }
+    canvas { width: 100%; aspect-ratio: 16 / 10; border: 1px solid #d9e1ec; border-radius: 8px; background: #fbfdff; display: block; }
+    .side { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .kpi { border: 1px solid #d9e1ec; border-radius: 8px; padding: 10px; }
+    .kpi span { color: #667085; font-size: 12px; }
+    .kpi strong { display: block; margin-top: 5px; }
+    .detail { min-height: 120px; margin-top: 12px; padding: 12px; border: 1px solid #d9e1ec; border-radius: 8px; background: #fbfdff; font-size: 13px; line-height: 1.45; }
+    .muted { color: #667085; }
+    @media (max-width: 1050px) { .layout { grid-template-columns: 1fr; } .side { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Full Curator Pipeline Dashboard</h1>
+  <p>Stage1~3은 숫자 산포도를 강요하지 않고 pipeline coverage로 보여줍니다. Stage4부터 semantic judge PCA, filter/dedup PCA, reward PCA와 최종 report를 보여줍니다.</p>
+  <section class="layout">
+    <aside class="panel">
+      <div class="timeline" id="timeline"></div>
+    </aside>
+    <section class="panel">
+      <div class="tabs">
+        <button id="qualityBtn" class="active">Stage4 Semantic PCA</button>
+        <button id="postprocessBtn">Stage5 Filter PCA</button>
+        <button id="llmBtn">Stage6 Reward PCA</button>
+        <button id="pathBtn">Live Stage Path</button>
+      </div>
+      <div class="path-note" id="pathNote"></div>
+      <canvas id="chart" width="1000" height="620"></canvas>
+      <div class="side">
+        <div class="kpi"><span>Score keys</span><strong id="keysText"></strong></div>
+        <div class="kpi"><span>PCA explained</span><strong id="explainedText"></strong></div>
+        <div class="kpi"><span>Samples</span><strong id="countText"></strong></div>
+      </div>
+      <div class="detail" id="detail"><strong>Hover a point</strong><div class="muted">샘플 점수와 출력이 여기에 표시됩니다.</div></div>
+    </section>
+  </section>
+</main>
+<script>
+let payload = {"stages": [{"id": "input", "label": "Raw Input", "description": "Text-only seed samples", "file": "data/curated/sample_input_data.jsonl", "count": 10, "metrics": {"text rows": 10}}, {"id": "stage1", "label": "Stage 1: Decomposition", "description": "Intent, emotion, cultural references", "file": "data/curated/stage1.jsonl", "count": 10, "metrics": {"cultural refs": 19, "avg refs": 1.9}}, {"id": "stage2", "label": "Stage 2: Cultural Mapping", "description": "Mapped references and localization candidates", "file": "data/curated/stage2.jsonl", "count": 10, "metrics": {"mapped refs": 19, "retrieved": 14}}, {"id": "stage3", "label": "Stage 3: Generation", "description": "Final Korean rewrite candidates", "file": "data/curated/stage3.jsonl", "count": 10, "metrics": {"generated rewrites": 10}}, {"id": "stage4", "label": "Stage 4: Semantic Judge", "description": "Semantic, property, naturalness, cultural, register axes", "file": "data/curated/stage4.jsonl", "count": 11, "metrics": {"semantic judged": 11, "rejected": 4}}, {"id": "stage5", "label": "Stage 5: Filter + Dedup", "description": "Aggregate score threshold and near-duplicate filtering", "file": "data/curated/stage5_postprocessed.jsonl", "count": 7, "metrics": {"accepted": 6, "rejected": 1}}, {"id": "stage6", "label": "Stage 6: Reward", "description": "Reward-model axes for accepted rows", "file": "data/curated/stage6_evaluated.jsonl", "count": 6, "metrics": {"reward scored": 6, "avg aggregate": 4.721}}, {"id": "stage7", "label": "Stage 7: Report", "description": "Accepted/rejected totals and distribution summary", "file": "data/curated/stage7_report.jsonl", "count": 1, "metrics": {"accepted": 6, "rejected": 5}}], "qualityPca": {"keys": ["cultural_appropriateness", "naturalness", "property_preservation", "register_consistency", "semantic_cosine"], "explained": [0.4327, 0.3447, 0.2161], "points": [{"id": "good-001", "domain": "unknown", "platform": "twitter", "source": "Ugh my boss wants me to work this weekend again lol", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.97, "coords": [0.161312, 0.403629, 0.275265]}, {"id": "good-002", "domain": "unknown", "platform": "instagram", "source": "just had the best pumpkin spice latte ever omg 🎃", "output": "방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.17, "coords": [-0.366657, 0.078684, 1.059885]}, {"id": "good-003", "domain": "unknown", "platform": "reddit", "source": "How do I reschedule a doctor's appointment?", "output": "병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.97, "coords": [0.161312, 0.403629, 0.275265]}, {"id": "good-004", "domain": "unknown", "platform": "twitter", "source": "dreading thanksgiving with the in-laws this year 😩", "output": "올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.97, "coords": [0.161312, 0.403629, 0.275265]}, {"id": "good-005", "domain": "unknown", "platform": "reddit", "source": "Just failed my driving test for the 3rd time... feeling really down", "output": "운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.17, "coords": [-0.366657, 0.078684, 1.059885]}, {"id": "good-006", "domain": "unknown", "platform": "twitter", "source": "oh greattt, another meeting that could've been an email 🙄", "output": "와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.97, "coords": [0.161312, 0.403629, 0.275265]}, {"id": "dup-001", "domain": "unknown", "platform": "twitter", "source": "Ugh my boss again wants me to work this weekend lol", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네 ㅎㅎ", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.97, "coords": [0.161312, 0.403629, 0.275265]}, {"id": "bad-semantic-meaning", "domain": "unknown", "platform": "reddit", "source": "How do I reset my WiFi router?", "output": "오늘 점심으로 뭐 먹을지 고민되네 진짜", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.3}, "avg": 3.86, "coords": [0.147756, 0.408502, 0.272097]}, {"id": "bad-semantic-property", "domain": "unknown", "platform": "twitter", "source": "I AM SO FURIOUS RIGHT NOW I CANNOT EVEN", "output": "음 조금 기분이 별로네", "scores": {"cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 1.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.37, "coords": [1.74522, 1.378464, -2.078593]}, {"id": "bad-semantic-naturalness", "domain": "unknown", "platform": "twitter", "source": "omg this is so lit 🔥", "output": "오 마이 갓 이것은 정말 뜨겁다", "scores": {"cultural_appropriateness": 5.0, "naturalness": 1.0, "property_preservation": 5.0, "register_consistency": 5.0, "semantic_cosine": 0.7}, "avg": 3.34, "coords": [-3.483492, -0.655545, -1.341034]}, {"id": "bad-semantic-cultural", "domain": "unknown", "platform": "instagram", "source": "I'm going to prom with my date this weekend", "output": "이번 주말에 데이트 상대랑 수학여행 간다", "scores": {"cultural_appropriateness": 1.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 3.17, "coords": [1.517272, -3.306933, -0.348567]}]}, "postprocessPca": {"keys": ["aggregate", "cultural_appropriateness", "naturalness", "property_preservation", "register_consistency", "semantic_cosine"], "explained": [1.0, 0.0, 0.0], "points": [{"id": "good-001", "domain": "unknown", "platform": "twitter", "source": "Ugh my boss wants me to work this weekend again lol", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.0812, "coords": [-0.294508, -0.0, -0.0]}, {"id": "good-002", "domain": "unknown", "platform": "instagram", "source": "just had the best pumpkin spice latte ever omg 🎃", "output": "방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "scores": {"aggregate": 4.8875, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.2896, "coords": [0.736269, -0.0, -0.0]}, {"id": "good-003", "domain": "unknown", "platform": "reddit", "source": "How do I reschedule a doctor's appointment?", "output": "병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.0812, "coords": [-0.294508, -0.0, -0.0]}, {"id": "good-004", "domain": "unknown", "platform": "twitter", "source": "dreading thanksgiving with the in-laws this year 😩", "output": "올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.0812, "coords": [-0.294508, -0.0, -0.0]}, {"id": "good-005", "domain": "unknown", "platform": "reddit", "source": "Just failed my driving test for the 3rd time... feeling really down", "output": "운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "scores": {"aggregate": 4.8875, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.2896, "coords": [0.736269, -0.0, -0.0]}, {"id": "good-006", "domain": "unknown", "platform": "twitter", "source": "oh greattt, another meeting that could've been an email 🙄", "output": "와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.0812, "coords": [-0.294508, -0.0, -0.0]}, {"id": "dup-001", "domain": "unknown", "platform": "twitter", "source": "Ugh my boss again wants me to work this weekend lol", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네 ㅎㅎ", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "semantic_cosine": 0.85}, "avg": 4.0812, "coords": [-0.294508, -0.0, -0.0]}]}, "llmPca": {"keys": ["aggregate", "cultural_appropriateness", "naturalness", "property_preservation", "register_consistency", "reward_coherence", "reward_complexity", "reward_correctness", "reward_helpfulness", "reward_verbosity", "semantic_cosine"], "explained": [0.4566, 0.2587, 0.2105], "points": [{"id": "good-001", "domain": "unknown", "platform": "twitter", "source": "Ugh my boss wants me to work this weekend again lol", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "reward_coherence": 4.0, "reward_complexity": 3.0, "reward_correctness": 4.0, "reward_helpfulness": 4.0, "reward_verbosity": 3.0, "semantic_cosine": 0.85}, "avg": 3.8625, "coords": [-0.481002, 0.489595, -0.157079]}, {"id": "good-002", "domain": "unknown", "platform": "instagram", "source": "just had the best pumpkin spice latte ever omg 🎃", "output": "방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "scores": {"aggregate": 4.8875, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "reward_coherence": 4.0, "reward_complexity": 3.0, "reward_correctness": 5.0, "reward_helpfulness": 4.0, "reward_verbosity": 3.0, "semantic_cosine": 0.85}, "avg": 4.067, "coords": [-0.509824, -0.53867, 0.568389]}, {"id": "good-003", "domain": "unknown", "platform": "reddit", "source": "How do I reschedule a doctor's appointment?", "output": "병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "reward_coherence": 5.0, "reward_complexity": 4.0, "reward_correctness": 5.0, "reward_helpfulness": 5.0, "reward_verbosity": 4.0, "semantic_cosine": 0.85}, "avg": 4.317, "coords": [1.612318, -0.201751, 0.033387]}, {"id": "good-004", "domain": "unknown", "platform": "twitter", "source": "dreading thanksgiving with the in-laws this year 😩", "output": "올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "reward_coherence": 4.0, "reward_complexity": 3.0, "reward_correctness": 5.0, "reward_helpfulness": 4.0, "reward_verbosity": 3.0, "semantic_cosine": 0.85}, "avg": 3.9534, "coords": [-0.212036, 0.203092, 0.688554]}, {"id": "good-005", "domain": "unknown", "platform": "reddit", "source": "Just failed my driving test for the 3rd time... feeling really down", "output": "운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "scores": {"aggregate": 4.8875, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 5.0, "register_consistency": 5.0, "reward_coherence": 5.0, "reward_complexity": 3.0, "reward_correctness": 4.0, "reward_helpfulness": 4.0, "reward_verbosity": 3.0, "semantic_cosine": 0.85}, "avg": 4.067, "coords": [-0.41806, -0.77065, -0.74096]}, {"id": "good-006", "domain": "unknown", "platform": "twitter", "source": "oh greattt, another meeting that could've been an email 🙄", "output": "와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "scores": {"aggregate": 4.6375, "cultural_appropriateness": 5.0, "naturalness": 5.0, "property_preservation": 4.0, "register_consistency": 5.0, "reward_coherence": 4.0, "reward_complexity": 4.0, "reward_correctness": 4.0, "reward_helpfulness": 4.0, "reward_verbosity": 3.0, "semantic_cosine": 0.85}, "avg": 3.9534, "coords": [0.008604, 0.818383, -0.392291]}]}, "stagePath": {"stages": [{"id": "input", "label": "Input", "axis": "stable sample lane"}, {"id": "stage1", "label": "Stage 1", "axis": "decomposition lane"}, {"id": "stage2", "label": "Stage 2", "axis": "mapping lane"}, {"id": "stage3", "label": "Stage 3", "axis": "generation lane"}, {"id": "stage4", "label": "Stage 4", "axis": "semantic judge PCA local axis"}, {"id": "stage5", "label": "Stage 5", "axis": "filter/dedup PCA local axis"}, {"id": "stage6", "label": "Stage 6", "axis": "reward PCA local axis"}, {"id": "stage7", "label": "Stage 7", "axis": "report summary lane"}], "frames": [{"id": "input", "label": "Input", "axis": "stable sample lane", "points": [{"id": "good-001", "x": 0.08, "y": 0.083333, "label": "good-001", "output": "Ugh my boss wants me to work this weekend again lol", "axis": "stable sample lane", "score": null}, {"id": "good-002", "x": 0.08, "y": 0.166667, "label": "good-002", "output": "just had the best pumpkin spice latte ever omg 🎃", "axis": "stable sample lane", "score": null}, {"id": "good-003", "x": 0.08, "y": 0.25, "label": "good-003", "output": "How do I reschedule a doctor's appointment?", "axis": "stable sample lane", "score": null}, {"id": "good-004", "x": 0.08, "y": 0.333333, "label": "good-004", "output": "dreading thanksgiving with the in-laws this year 😩", "axis": "stable sample lane", "score": null}, {"id": "good-005", "x": 0.08, "y": 0.416667, "label": "good-005", "output": "Just failed my driving test for the 3rd time... feeling really down", "axis": "stable sample lane", "score": null}, {"id": "good-006", "x": 0.08, "y": 0.5, "label": "good-006", "output": "oh greattt, another meeting that could've been an email 🙄", "axis": "stable sample lane", "score": null}, {"id": "dup-001", "x": 0.08, "y": 0.583333, "label": "dup-001", "output": "Ugh my boss again wants me to work this weekend lol", "axis": "stable sample lane", "score": null}, {"id": "bad-semantic-meaning", "x": 0.08, "y": 0.666667, "label": "bad-semantic-meaning", "output": "How do I reset my WiFi router?", "axis": "stable sample lane", "score": null}, {"id": "bad-semantic-property", "x": 0.08, "y": 0.75, "label": "bad-semantic-property", "output": "I AM SO FURIOUS RIGHT NOW I CANNOT EVEN", "axis": "stable sample lane", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.08, "y": 0.833333, "label": "bad-semantic-naturalness", "output": "omg this is so lit 🔥", "axis": "stable sample lane", "score": null}, {"id": "bad-semantic-cultural", "x": 0.08, "y": 0.916667, "label": "bad-semantic-cultural", "output": "I'm going to prom with my date this weekend", "axis": "stable sample lane", "score": null}]}, {"id": "stage1", "label": "Stage 1", "axis": "decomposition lane", "points": [{"id": "good-001", "x": 0.2, "y": 0.083333, "label": "good-001: complaint", "output": "casual · anger · refs 0", "axis": "decomposition lane", "score": null}, {"id": "good-002", "x": 0.2, "y": 0.166667, "label": "good-002: brag", "output": "casual · joy · refs 1", "axis": "decomposition lane", "score": null}, {"id": "good-003", "x": 0.2, "y": 0.25, "label": "good-003: question", "output": "formal · neutral · refs 1", "axis": "decomposition lane", "score": null}, {"id": "good-004", "x": 0.2, "y": 0.333333, "label": "good-004: complaint", "output": "casual · sadness · refs 2", "axis": "decomposition lane", "score": null}, {"id": "good-005", "x": 0.2, "y": 0.416667, "label": "good-005: empathy_seeking", "output": "casual · sadness · refs 0", "axis": "decomposition lane", "score": null}, {"id": "good-006", "x": 0.2, "y": 0.5, "label": "good-006: sarcasm", "output": "public · frustration · refs 0", "axis": "decomposition lane", "score": null}, {"id": "dup-001", "x": 0.2, "y": 0.583333, "label": "dup-001: complaint", "output": "casual · anger · refs 0", "axis": "decomposition lane", "score": null}, {"id": "bad-semantic-meaning", "x": 0.2, "y": 0.666667, "label": "bad-semantic-meaning: question", "output": "casual · neutral · refs 0", "axis": "decomposition lane", "score": null}, {"id": "bad-semantic-property", "x": 0.2, "y": 0.75, "label": "bad-semantic-property: complaint", "output": "casual · anger · refs 0", "axis": "decomposition lane", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.2, "y": 0.833333, "label": "bad-semantic-naturalness: brag", "output": "casual · joy · refs 0", "axis": "decomposition lane", "score": null}, {"id": "bad-semantic-cultural", "x": 0.2, "y": 0.916667, "label": "bad-semantic-cultural: brag", "output": "casual · joy · refs 1", "axis": "decomposition lane", "score": null}]}, {"id": "stage2", "label": "Stage 2", "axis": "mapping lane", "points": [{"id": "good-001", "x": 0.32, "y": 0.083333, "label": "good-001: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "good-002", "x": 0.32, "y": 0.166667, "label": "good-002: 1 refs", "output": "스타벅스 호박 스파이스 라떼", "axis": "mapping lane", "score": null}, {"id": "good-003", "x": 0.32, "y": 0.25, "label": "good-003: 1 refs", "output": "병원 예약", "axis": "mapping lane", "score": null}, {"id": "good-004", "x": 0.32, "y": 0.333333, "label": "good-004: 2 refs", "output": "추석, 시댁", "axis": "mapping lane", "score": null}, {"id": "good-005", "x": 0.32, "y": 0.416667, "label": "good-005: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "good-006", "x": 0.32, "y": 0.5, "label": "good-006: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "dup-001", "x": 0.32, "y": 0.583333, "label": "dup-001: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "bad-semantic-meaning", "x": 0.32, "y": 0.666667, "label": "bad-semantic-meaning: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "bad-semantic-property", "x": 0.32, "y": 0.75, "label": "bad-semantic-property: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.32, "y": 0.833333, "label": "bad-semantic-naturalness: 0 refs", "output": "", "axis": "mapping lane", "score": null}, {"id": "bad-semantic-cultural", "x": 0.32, "y": 0.916667, "label": "bad-semantic-cultural: 1 refs", "output": "수학여행", "axis": "mapping lane", "score": null}]}, {"id": "stage3", "label": "Stage 3", "axis": "generation lane", "points": [{"id": "good-001", "x": 0.44, "y": 0.083333, "label": "good-001", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "axis": "generation lane", "score": null}, {"id": "good-002", "x": 0.44, "y": 0.166667, "label": "good-002", "output": "방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "axis": "generation lane", "score": null}, {"id": "good-003", "x": 0.44, "y": 0.25, "label": "good-003", "output": "병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "axis": "generation lane", "score": null}, {"id": "good-004", "x": 0.44, "y": 0.333333, "label": "good-004", "output": "올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "axis": "generation lane", "score": null}, {"id": "good-005", "x": 0.44, "y": 0.416667, "label": "good-005", "output": "운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "axis": "generation lane", "score": null}, {"id": "good-006", "x": 0.44, "y": 0.5, "label": "good-006", "output": "와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "axis": "generation lane", "score": null}, {"id": "dup-001", "x": 0.44, "y": 0.583333, "label": "dup-001", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네 ㅎㅎ", "axis": "generation lane", "score": null}, {"id": "bad-semantic-meaning", "x": 0.44, "y": 0.666667, "label": "bad-semantic-meaning", "output": "오늘 점심으로 뭐 먹을지 고민되네 진짜", "axis": "generation lane", "score": null}, {"id": "bad-semantic-property", "x": 0.44, "y": 0.75, "label": "bad-semantic-property", "output": "음 조금 기분이 별로네", "axis": "generation lane", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.44, "y": 0.833333, "label": "bad-semantic-naturalness", "output": "오 마이 갓 이것은 정말 뜨겁다", "axis": "generation lane", "score": null}, {"id": "bad-semantic-cultural", "x": 0.44, "y": 0.916667, "label": "bad-semantic-cultural", "output": "이번 주말에 데이트 상대랑 수학여행 간다", "axis": "generation lane", "score": null}]}, {"id": "stage4", "label": "Stage 4", "axis": "semantic judge PCA local axis", "points": [{"id": "good-001", "x": 0.571982, "y": 0.721876, "label": "good-001", "output": "accepted · 와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "axis": "semantic judge PCA local axis", "score": 3.97}, {"id": "good-002", "x": 0.565843, "y": 0.669168, "label": "good-002", "output": "accepted · 방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "axis": "semantic judge PCA local axis", "score": 4.17}, {"id": "good-003", "x": 0.571982, "y": 0.721876, "label": "good-003", "output": "accepted · 병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "axis": "semantic judge PCA local axis", "score": 3.97}, {"id": "good-004", "x": 0.571982, "y": 0.721876, "label": "good-004", "output": "accepted · 올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "axis": "semantic judge PCA local axis", "score": 3.97}, {"id": "good-005", "x": 0.565843, "y": 0.669168, "label": "good-005", "output": "accepted · 운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "axis": "semantic judge PCA local axis", "score": 4.17}, {"id": "good-006", "x": 0.571982, "y": 0.721876, "label": "good-006", "output": "accepted · 와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "axis": "semantic judge PCA local axis", "score": 3.97}, {"id": "dup-001", "x": 0.571982, "y": 0.721876, "label": "dup-001", "output": "accepted · 와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네 ㅎㅎ", "axis": "semantic judge PCA local axis", "score": 3.97}, {"id": "bad-semantic-meaning", "x": 0.571825, "y": 0.722666, "label": "bad-semantic-meaning", "output": "rejected: semantic_drift · 오늘 점심으로 뭐 먹을지 고민되네 진짜", "axis": "semantic judge PCA local axis", "score": 3.86}, {"id": "bad-semantic-property", "x": 0.5904, "y": 0.88, "label": "bad-semantic-property", "output": "rejected: axis_floor · 음 조금 기분이 별로네", "axis": "semantic judge PCA local axis", "score": 3.37}, {"id": "bad-semantic-naturalness", "x": 0.5296, "y": 0.550071, "label": "bad-semantic-naturalness", "output": "rejected: axis_floor · 오 마이 갓 이것은 정말 뜨겁다", "axis": "semantic judge PCA local axis", "score": 3.34}, {"id": "bad-semantic-cultural", "x": 0.587749, "y": 0.12, "label": "bad-semantic-cultural", "output": "rejected: axis_floor · 이번 주말에 데이트 상대랑 수학여행 간다", "axis": "semantic judge PCA local axis", "score": 3.17}]}, {"id": "stage5", "label": "Stage 5", "axis": "filter/dedup PCA local axis", "points": [{"id": "good-001", "x": 0.6496, "y": 0.125, "label": "good-001: accepted", "output": "accepted · 와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "axis": "filter/dedup PCA local axis", "score": 4.081}, {"id": "good-002", "x": 0.7104, "y": 0.25, "label": "good-002: accepted", "output": "accepted · 방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "axis": "filter/dedup PCA local axis", "score": 4.29}, {"id": "good-003", "x": 0.6496, "y": 0.375, "label": "good-003: accepted", "output": "accepted · 병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "axis": "filter/dedup PCA local axis", "score": 4.081}, {"id": "good-004", "x": 0.6496, "y": 0.5, "label": "good-004: accepted", "output": "accepted · 올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "axis": "filter/dedup PCA local axis", "score": 4.081}, {"id": "good-005", "x": 0.7104, "y": 0.625, "label": "good-005: accepted", "output": "accepted · 운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "axis": "filter/dedup PCA local axis", "score": 4.29}, {"id": "good-006", "x": 0.6496, "y": 0.75, "label": "good-006: accepted", "output": "accepted · 와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "axis": "filter/dedup PCA local axis", "score": 4.081}, {"id": "dup-001", "x": 0.6496, "y": 0.875, "label": "dup-001: rejected: dedup", "output": "rejected: dedup · 와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네 ㅎㅎ", "axis": "filter/dedup PCA local axis", "score": 4.081}, {"id": "bad-semantic-meaning", "x": 0.68, "y": 0.666667, "label": "bad-semantic-meaning: missing", "output": "missing · ", "axis": "filter/dedup PCA local axis", "score": null}, {"id": "bad-semantic-property", "x": 0.68, "y": 0.75, "label": "bad-semantic-property: missing", "output": "missing · ", "axis": "filter/dedup PCA local axis", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.68, "y": 0.833333, "label": "bad-semantic-naturalness: missing", "output": "missing · ", "axis": "filter/dedup PCA local axis", "score": null}, {"id": "bad-semantic-cultural", "x": 0.68, "y": 0.916667, "label": "bad-semantic-cultural: missing", "output": "missing · ", "axis": "filter/dedup PCA local axis", "score": null}]}, {"id": "stage6", "label": "Stage 6", "axis": "reward PCA local axis", "points": [{"id": "good-001", "x": 0.770426, "y": 0.722748, "label": "good-001", "output": "와 우리 팀장 또 주말에 일하래 ㅋㅋ 진짜 레전드네", "axis": "reward PCA local axis", "score": 3.862}, {"id": "good-002", "x": 0.7696, "y": 0.230951, "label": "good-002", "output": "방금 스타벅스 호박 스파이스 라떼 먹었는데 진짜 역대급 🎃", "axis": "reward PCA local axis", "score": 4.067}, {"id": "good-003", "x": 0.8304, "y": 0.392092, "label": "good-003", "output": "병원 예약을 변경하려면 어떻게 해야 하나요? 보통 전화로 진료예약센터에 연락하면 되는지 궁금합니다.", "axis": "reward PCA local axis", "score": 4.317}, {"id": "good-004", "x": 0.778132, "y": 0.58572, "label": "good-004", "output": "올 추석에 시댁 가는 거 벌써부터 숨막히네 😩", "axis": "reward PCA local axis", "score": 3.953}, {"id": "good-005", "x": 0.772229, "y": 0.12, "label": "good-005", "output": "운전면허 시험 세 번째로 떨어졌어... 진짜 우울하네 ㅠㅠ", "axis": "reward PCA local axis", "score": 4.067}, {"id": "good-006", "x": 0.784453, "y": 0.88, "label": "good-006", "output": "와 정말 감사하네요~ 이메일로 보내면 될 걸 또 회의 잡아주시고 🙄", "axis": "reward PCA local axis", "score": 3.953}, {"id": "dup-001", "x": 0.8, "y": 0.583333, "label": "dup-001", "output": "", "axis": "reward PCA local axis", "score": null}, {"id": "bad-semantic-meaning", "x": 0.8, "y": 0.666667, "label": "bad-semantic-meaning", "output": "", "axis": "reward PCA local axis", "score": null}, {"id": "bad-semantic-property", "x": 0.8, "y": 0.75, "label": "bad-semantic-property", "output": "", "axis": "reward PCA local axis", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.8, "y": 0.833333, "label": "bad-semantic-naturalness", "output": "", "axis": "reward PCA local axis", "score": null}, {"id": "bad-semantic-cultural", "x": 0.8, "y": 0.916667, "label": "bad-semantic-cultural", "output": "", "axis": "reward PCA local axis", "score": null}]}, {"id": "stage7", "label": "Stage 7", "axis": "report summary lane", "points": [{"id": "good-001", "x": 0.92, "y": 0.083333, "label": "good-001: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "good-002", "x": 0.92, "y": 0.166667, "label": "good-002: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "good-003", "x": 0.92, "y": 0.25, "label": "good-003: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "good-004", "x": 0.92, "y": 0.333333, "label": "good-004: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "good-005", "x": 0.92, "y": 0.416667, "label": "good-005: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "good-006", "x": 0.92, "y": 0.5, "label": "good-006: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "dup-001", "x": 0.92, "y": 0.583333, "label": "dup-001: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "bad-semantic-meaning", "x": 0.92, "y": 0.666667, "label": "bad-semantic-meaning: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "bad-semantic-property", "x": 0.92, "y": 0.75, "label": "bad-semantic-property: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "bad-semantic-naturalness", "x": 0.92, "y": 0.833333, "label": "bad-semantic-naturalness: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}, {"id": "bad-semantic-cultural", "x": 0.92, "y": 0.916667, "label": "bad-semantic-cultural: report", "output": "accepted 6 / rejected 5", "axis": "report summary lane", "score": null}]}]}};
+const canvas = document.getElementById("chart");
+const ctx = canvas.getContext("2d");
+let mode = "qualityPca";
+let mouse = null;
+let hovered = null;
+let pathStartedAt = performance.now();
+let animationHandle = null;
+let stageClickTargets = [];
+
+function setMode(next) {
+  mode = next;
+  document.getElementById("qualityBtn").classList.toggle("active", mode === "qualityPca");
+  document.getElementById("postprocessBtn").classList.toggle("active", mode === "postprocessPca");
+  document.getElementById("llmBtn").classList.toggle("active", mode === "llmPca");
+  document.getElementById("pathBtn").classList.toggle("active", mode === "stagePath");
+  document.getElementById("pathNote").textContent = mode === "stagePath"
+    ? "각 stage는 local coordinate입니다. Stage4/5/6 column을 클릭하면 해당 stage의 PCA 화면으로 전환됩니다."
+    : "";
+  if (animationHandle && mode !== "stagePath") {
+    cancelAnimationFrame(animationHandle);
+    animationHandle = null;
+  }
+  if (mode === "stagePath") pathStartedAt = performance.now();
+  render();
+}
+function bounds(points) {
+  const xs = points.map(p => p.coords[0]);
+  const ys = points.map(p => p.coords[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  return {minX, maxX, minY, maxY, padX: Math.max((maxX - minX) * 0.15, 0.2), padY: Math.max((maxY - minY) * 0.15, 0.2)};
+}
+function sx(x, b) { return 60 + ((x - (b.minX - b.padX)) / Math.max((b.maxX + b.padX) - (b.minX - b.padX), 1e-6)) * (canvas.width - 120); }
+function sy(y, b) { return canvas.height - 56 - ((y - (b.minY - b.padY)) / Math.max((b.maxY + b.padY) - (b.minY - b.padY), 1e-6)) * (canvas.height - 112); }
+function color(avg) {
+  const t = Math.max(0, Math.min(1, (avg - 3.5) / 1.5));
+  const r = Math.round(217 + (3 - 217) * t);
+  const g = Math.round(45 + (152 - 45) * t);
+  const b = Math.round(32 + (85 - 32) * t);
+  return `rgb(${r},${g},${b})`;
+}
+function renderTimeline() {
+  document.getElementById("timeline").innerHTML = payload.stages.map(stage => {
+    const metrics = Object.entries(stage.metrics).map(([k, v]) => `<span class="metric">${k}: ${v}</span>`).join("");
+    return `<div class="card"><strong>${stage.label}</strong><div class="muted">${stage.description}</div><div class="muted">${stage.file}</div>${metrics}</div>`;
+  }).join("");
+}
+function render() {
+  if (mode === "stagePath") {
+    renderPath();
+    return;
+  }
+  const data = payload[mode];
+  const points = data.points;
+  const b = bounds(points);
+  hovered = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fbfdff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#e5ebf3"; ctx.lineWidth = 1;
+  for (let i = 0; i <= 6; i++) {
+    const x = 60 + ((canvas.width - 120) / 6) * i;
+    const y = 56 + ((canvas.height - 112) / 6) * i;
+    ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x, canvas.height - 56); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(60, y); ctx.lineTo(canvas.width - 60, y); ctx.stroke();
+  }
+  ctx.fillStyle = "#667085"; ctx.font = "13px sans-serif";
+  ctx.fillText("PC1", 24, 28); ctx.fillText("PC2", canvas.width - 84, canvas.height - 22);
+  points.forEach(point => {
+    const x = sx(point.coords[0], b), y = sy(point.coords[1], b);
+    ctx.beginPath(); ctx.fillStyle = color(point.avg); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+    ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (mouse && Math.hypot(mouse.x - x, mouse.y - y) < 12) hovered = point;
+  });
+  document.getElementById("keysText").textContent = data.keys.join(", ");
+  document.getElementById("explainedText").textContent = data.explained.map(v => Math.round(v * 100) + "%").join(" / ");
+  document.getElementById("countText").textContent = points.length;
+  renderDetail();
+}
+function pointColor(score, idx) {
+  if (score !== null && score !== undefined) return color(score);
+  const palette = ["#155eef", "#099250", "#dc6803", "#7a5af8", "#c11574", "#0e7090"];
+  return palette[idx % palette.length];
+}
+function pathPixel(point) {
+  return {
+    x: 64 + point.x * (canvas.width - 128),
+    y: 54 + point.y * (canvas.height - 108)
+  };
+}
+function interpPoint(a, b, t) {
+  return {
+    ...b,
+    id: a.id,
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    label: b.label,
+    output: b.output,
+    axis: b.axis,
+    score: b.score
+  };
+}
+function currentPathPoints() {
+  const frames = payload.stagePath.frames;
+  const total = frames.length - 1;
+  const cycle = 7800;
+  const elapsed = (performance.now() - pathStartedAt) % cycle;
+  const raw = (elapsed / cycle) * total;
+  const idx = Math.floor(raw);
+  const t = raw - idx;
+  const from = frames[Math.min(idx, total)];
+  const to = frames[Math.min(idx + 1, total)];
+  const fromById = Object.fromEntries(from.points.map(p => [p.id, p]));
+  const points = to.points.map(point => interpPoint(fromById[point.id] || point, point, t));
+  return {points, from, to, progress: t};
+}
+function renderPath() {
+  const frames = payload.stagePath.frames;
+  const live = currentPathPoints();
+  hovered = null;
+  stageClickTargets = [];
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fbfdff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "#d9e1ec"; ctx.lineWidth = 1;
+  ctx.fillStyle = "#667085"; ctx.font = "12px sans-serif";
+  frames.forEach(frame => {
+    const stageX = 0.08 + (frames.indexOf(frame) / Math.max(frames.length - 1, 1)) * 0.84;
+    const x = pathPixel({x: stageX, y: 0.5}).x;
+    const targetMode = frame.id === "stage4" ? "qualityPca" : frame.id === "stage5" ? "postprocessPca" : frame.id === "stage6" ? "llmPca" : null;
+    if (targetMode) {
+      stageClickTargets.push({mode: targetMode, x1: x - 46, x2: x + 46, y1: 0, y2: canvas.height});
+      ctx.fillStyle = "rgba(21,94,239,0.06)";
+      ctx.fillRect(x - 46, 54, 92, canvas.height - 108);
+    }
+    ctx.beginPath(); ctx.moveTo(x, 54); ctx.lineTo(x, canvas.height - 54); ctx.stroke();
+    ctx.fillStyle = targetMode ? "#155eef" : "#667085";
+    ctx.fillText(frame.label, x - 24, 28);
+  });
+
+  const ids = live.points.map(point => point.id);
+  ids.forEach((id, idx) => {
+    ctx.beginPath();
+    frames.forEach((frame, frameIdx) => {
+      const point = frame.points.find(item => item.id === id);
+      if (!point) return;
+      const px = pathPixel(point);
+      if (frameIdx === 0) ctx.moveTo(px.x, px.y);
+      else ctx.lineTo(px.x, px.y);
+    });
+    ctx.strokeStyle = "rgba(102,112,133,0.18)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  live.points.forEach((point, idx) => {
+    const px = pathPixel(point);
+    ctx.beginPath();
+    ctx.fillStyle = pointColor(point.score, idx);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.arc(px.x, px.y, 9, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#172033";
+    ctx.font = "11px sans-serif";
+    ctx.fillText(point.id, px.x + 12, px.y + 4);
+    if (mouse && Math.hypot(mouse.x - px.x, mouse.y - px.y) < 14) hovered = point;
+  });
+
+  document.getElementById("keysText").textContent = live.to.axis;
+  document.getElementById("explainedText").textContent = `${live.from.label} → ${live.to.label}`;
+  document.getElementById("countText").textContent = live.points.length;
+  renderDetail();
+  animationHandle = requestAnimationFrame(() => {
+    if (mode === "stagePath") renderPath();
+  });
+}
+function renderDetail() {
+  const detail = document.getElementById("detail");
+  if (!hovered) {
+    detail.innerHTML = "<strong>Hover a point</strong><div class='muted'>샘플 점수와 출력이 여기에 표시됩니다.</div>";
+    return;
+  }
+  if (mode === "stagePath") {
+    const scoreText = hovered.score === null || hovered.score === undefined ? "" : `<div style="margin-top:8px;">Score-like signal <strong>${hovered.score.toFixed(2)}</strong></div>`;
+    detail.innerHTML = `<strong>${hovered.label}</strong><div class="muted">${hovered.axis}</div>${scoreText}<div style="margin-top:10px;"><strong>Stage output</strong><br><span class="muted">${hovered.output}</span></div>`;
+    return;
+  }
+  const scores = Object.entries(hovered.scores).map(([k, v]) => `${k} ${v}`).join(" · ");
+  detail.innerHTML = `<strong>${hovered.id}</strong><div class="muted">${hovered.platform} · ${hovered.domain}</div><div style="margin-top:8px;">Avg <strong>${hovered.avg.toFixed(2)}</strong> · ${scores}</div><div style="margin-top:10px;"><strong>Output</strong><br><span class="muted">${hovered.output}</span></div>`;
+}
+document.getElementById("qualityBtn").addEventListener("click", () => setMode("qualityPca"));
+document.getElementById("postprocessBtn").addEventListener("click", () => setMode("postprocessPca"));
+document.getElementById("llmBtn").addEventListener("click", () => setMode("llmPca"));
+document.getElementById("pathBtn").addEventListener("click", () => setMode("stagePath"));
+canvas.addEventListener("mousemove", event => {
+  const rect = canvas.getBoundingClientRect();
+  mouse = {x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height};
+  render();
+});
+canvas.addEventListener("mouseleave", () => { mouse = null; render(); });
+canvas.addEventListener("click", event => {
+  if (mode !== "stagePath") return;
+  const rect = canvas.getBoundingClientRect();
+  const click = {x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height};
+  const target = stageClickTargets.find(item => click.x >= item.x1 && click.x <= item.x2 && click.y >= item.y1 && click.y <= item.y2);
+  if (target) setMode(target.mode);
+});
+renderTimeline();
+render();
+async function refreshPayload() {
+  if (!location.protocol.startsWith("http")) return;
+  try {
+    const response = await fetch("/api/payload", {cache: "no-store"});
+    if (!response.ok) return;
+    payload = await response.json();
+    renderTimeline();
+    if (mode !== "stagePath") render();
+  } catch (error) {
+    // Static-file mode has no API endpoint; the embedded payload still works.
+  }
+}
+setInterval(refreshPayload, 2000);
+</script>
+</body>
+</html>
