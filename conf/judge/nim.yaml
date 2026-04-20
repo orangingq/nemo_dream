@@ -1,0 +1,10 @@
+_target_: pipeline.judges.nim.NimJudge
+base_url: https://integrate.api.nvidia.com/v1
+models:
+  safety: nvidia/llama-3.1-nemoguard-8b-content-safety
+  translate: nvidia/nemotron-3-super-120b-a12b
+  embed: nvidia/nv-embedqa-e5-v5
+  judge: nvidia/nemotron-3-super-120b-a12b
+  reward: nvidia/nemotron-4-340b-reward
+max_tokens: 512
+temperature: 0.0
