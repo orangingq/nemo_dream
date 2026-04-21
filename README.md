@@ -2,10 +2,11 @@
 
 English-to-Korean localization data curation pipeline for hackathon demos.
 
-This repo now has three connected pieces:
+This repo now has one main flow:
 
-- `scripts/run_from_seed.py`: full seed-to-report runner
-- `scripts/build_curated_stages.py`: Stage1~3 NIM generation from seed text
+- `generate.py`: unified seed-to-report runner
+- `scripts/run_from_seed.py`: compatibility wrapper around `generate.py`
+- `scripts/build_curated_stages.py`: Stage1~3-only wrapper over `pipeline/stages/`
 - `pipeline/`: curator-style validation/evaluation stages from `feat/mockup-pipeline`
 - `dashboard.py`: visualization dashboard for `data/curated/stage1` through `stage7`
 
@@ -15,27 +16,38 @@ The full flow starts from seed English text, builds Stage1~3 with NIM, then feed
 
 | Stage | File | Purpose |
 | --- | --- | --- |
-| Stage 1 | `scripts/build_curated_stages.py` | NIM sociolinguistic decomposition from seed English text |
-| Stage 2 | `scripts/build_curated_stages.py` | NIM cultural reference mapping |
-| Stage 3 | `scripts/build_curated_stages.py` | NIM Korean rewrite generation |
-| Stage 4 | `pipeline/stages/s1_schema.py`, `s2_rules.py`, `s3_safety.py` | Schema, rule, and safety validation after S0 normalization |
-| Stage 5 | `pipeline/stages/s4_semantic.py`, `s5_filter.py` | Semantic/property evaluation and aggregate filtering |
-| Stage 6 | `pipeline/stages/s5_filter.py`, `s6_reward.py` | Dedup and reward scoring |
-| Stage 7 | `pipeline/stages/s7_report.py` | Report and chart output |
+| Stage 0 | `pipeline/stages/s0_seed.py` | Seed dataset normalization into `stage0.jsonl` |
+| Stage 1 | `pipeline/stages/s1_decompose.py` | NIM sociolinguistic decomposition |
+| Stage 2 | `pipeline/stages/s2_map.py` | NIM cultural reference mapping |
+| Stage 3 | `pipeline/stages/s3_rewrite.py` | NIM Korean rewrite generation |
+| Stage 4 | `pipeline/stages/s4_normalize.py` | Stage3 rows normalized into curator Sample records |
+| Stage 5 | `pipeline/stages/s5_schema.py` | Structural validity check: schema validation for required fields, types, and allowed values |
+| Stage 6 | `pipeline/stages/s6_rules.py` | Content validity check: rule-based validation for register/style/length/reference consistency |
+| Stage 7 | `pipeline/stages/s7_safety.py` | PII and content safety checks |
+| Stage 8 | `pipeline/stages/s8_semantic.py` | Semantic/property evaluation |
+| Stage 9 | `pipeline/stages/s9_quality.py` | Aggregate quality thresholding |
+| Stage 10 | `pipeline/stages/s10_dedup.py` | Near-duplicate filtering |
+| Stage 11 | `pipeline/stages/s11_reward.py` | Reward scoring |
+| Stage 12 | `pipeline/stages/s12_report.py` | Report and chart output |
 
 ## Data Flow
 
-Curated data lives under `data/curated/`:
+Curated data lives under `data/curated/`, with a canonical `stage0.jsonl` through `stage12.jsonl` naming scheme:
 
 ```text
-data/curated/prosocial_input.jsonl     seed English text
+data/curated/stage0.jsonl              seed English text
 data/curated/stage1.jsonl              Stage1 decomposition output
 data/curated/stage2.jsonl              Stage2 cultural mapping output
 data/curated/stage3.jsonl              Stage3 Korean rewrite generation output
-data/curated/stage4.jsonl              semantic judge style records
-data/curated/stage5_postprocessed.jsonl
-data/curated/stage6_evaluated.jsonl
-data/curated/stage7_report.jsonl
+data/curated/stage4.jsonl              normalized Sample records
+data/curated/stage5.jsonl              structural validity snapshot
+data/curated/stage6.jsonl              content validity snapshot
+data/curated/stage7.jsonl              safety validation snapshot
+data/curated/stage8.jsonl              semantic evaluation snapshot
+data/curated/stage9.jsonl              quality threshold snapshot
+data/curated/stage10.jsonl             dedup snapshot
+data/curated/stage11.jsonl             reward snapshot
+data/curated/stage12.jsonl             report snapshot
 ```
 
 `stage1` to `stage3` use the `nemo_dream_step1` shape, for example `decomposed`, `mapped_refs`, and `generation.rewritten_text`.
@@ -77,19 +89,19 @@ Start from seed data and run the full pipeline:
 ```bash
 export NVIDIA_API_KEY=nvapi-...
 
-python scripts/import_prosocial_dialog.py \
+python3 scripts/import_prosocial_dialog.py \
   --split train \
   --limit 10 \
   --safety-label __casual__ \
-  --output data/curated/prosocial_input.jsonl
+  --output data/curated/stage0.jsonl
 
-python scripts/run_from_seed.py \
-  --input data/curated/prosocial_input.jsonl \
-  --curated-dir data/curated \
+python3 generate.py \
+  --seed_dataset=data/curated/stage0.jsonl \
+  --output_dir=data/curated \
   --limit 10 \
-  --normalized-out raw/prosocial_normalized.jsonl \
-  --validation-out-dir val_out_prosocial \
-  --no-chart
+  --judge=nim \
+  --no-chart \
+  --visualize
 ```
 
 The full runner executes:
@@ -99,23 +111,46 @@ seed JSONL
 -> Stage1 NIM decomposition
 -> Stage2 NIM cultural mapping
 -> Stage3 NIM Korean rewrite
--> S0 normalize Stage3 output
--> Stage4 schema/rules/safety
--> Stage5 semantic/filter
--> Stage6 dedup/reward
--> Stage7 report
+-> Stage4 normalize Stage3 output
+-> Stage5 structural validity check
+-> Stage6 content validity check
+-> Stage7 safety validation
+-> Stage8 semantic evaluation
+-> Stage9 quality threshold
+-> Stage10 dedup
+-> Stage11 reward
+-> Stage12 report
 ```
 
 Outputs are written to:
 
 ```text
+data/curated/stage0.jsonl
 data/curated/stage1.jsonl
 data/curated/stage2.jsonl
 data/curated/stage3.jsonl
-raw/prosocial_normalized.jsonl
-val_out_prosocial/accepted.jsonl
-val_out_prosocial/rejected.jsonl
-val_out_prosocial/report.json
+data/curated/stage4.jsonl
+data/curated/stage5.jsonl
+data/curated/stage6.jsonl
+data/curated/stage7.jsonl
+data/curated/stage8.jsonl
+data/curated/stage9.jsonl
+data/curated/stage10.jsonl
+data/curated/stage11.jsonl
+data/curated/stage12.jsonl
+data/curated/raw/normalized.jsonl
+data/curated/validation/accepted.jsonl
+data/curated/validation/rejected.jsonl
+data/curated/validation/report.json
+```
+
+When `--visualize` is enabled, the dashboard serves from the same `--output_dir` and refreshes automatically as each stage file is written:
+
+```bash
+python3 generate.py \
+  --seed_dataset=data/curated/stage0.jsonl \
+  --output_dir=data/curated \
+  --visualize
 ```
 
 You can also start from an existing generated stage file. Run Stage4+ validation/evaluation from `stage3` generation output:

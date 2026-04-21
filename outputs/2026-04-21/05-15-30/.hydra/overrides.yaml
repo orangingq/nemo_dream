@@ -1,0 +1,5 @@
+- judge=nim
+- generate.source_jsonl=data/curated/stage3.jsonl
+- generate.out_jsonl=raw/prosocial_normalized.jsonl
+- paths.out_dir=val_out_prosocial
+- report.chart=false

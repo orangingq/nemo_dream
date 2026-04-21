@@ -1,4 +1,17 @@
 from __future__ import annotations
+
+"""Stage 5: aggregate quality filtering and near-duplicate removal.
+
+Input record shape:
+`stage4.jsonl` rows with `metadata`, `quality`, `valid`, and optional
+`reject_reasons`.
+
+Output record shape (`stage5.jsonl`):
+- same row contract as Stage 4
+- `quality.aggregate` is filled
+- `valid` / `reject_reasons` may change after thresholding or dedup
+"""
+
 try:
     from datasketch import MinHash, MinHashLSH
 except ModuleNotFoundError:

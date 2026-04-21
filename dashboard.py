@@ -16,14 +16,19 @@ from util import load_jsonl
 
 
 STAGE_FILES = [
-    ("input", "sample_input_data.jsonl", "Raw Input", "Text-only seed samples"),
+    ("input", "stage0.jsonl", "Raw Input", "Text-only seed samples"),
     ("stage1", "stage1.jsonl", "Stage 1: Decomposition", "Intent, emotion, cultural references"),
     ("stage2", "stage2.jsonl", "Stage 2: Cultural Mapping", "Mapped references and localization candidates"),
     ("stage3", "stage3.jsonl", "Stage 3: Generation", "Final Korean rewrite candidates"),
-    ("stage4", "stage4.jsonl", "Stage 4: Semantic Judge", "Semantic, property, naturalness, cultural, register axes"),
-    ("stage5", "stage5_postprocessed.jsonl", "Stage 5: Filter + Dedup", "Aggregate score threshold and near-duplicate filtering"),
-    ("stage6", "stage6_evaluated.jsonl", "Stage 6: Reward", "Reward-model axes for accepted rows"),
-    ("stage7", "stage7_report.jsonl", "Stage 7: Report", "Accepted/rejected totals and distribution summary"),
+    ("stage4", "stage4.jsonl", "Stage 4: Normalize", "Stage3 rows normalized into curator Sample records"),
+    ("stage5", "stage5.jsonl", "Stage 5: Schema", "Pydantic schema validation"),
+    ("stage6", "stage6.jsonl", "Stage 6: Rules", "Rule-based validation and rejection"),
+    ("stage7", "stage7.jsonl", "Stage 7: Safety", "PII and content safety checks"),
+    ("stage8", "stage8.jsonl", "Stage 8: Semantic", "Semantic, property, naturalness, cultural, register axes"),
+    ("stage9", "stage9.jsonl", "Stage 9: Quality", "Aggregate quality thresholding"),
+    ("stage10", "stage10.jsonl", "Stage 10: Dedup", "Near-duplicate filtering"),
+    ("stage11", "stage11.jsonl", "Stage 11: Reward", "Reward-model axes for accepted rows"),
+    ("stage12", "stage12.jsonl", "Stage 12: Report", "Accepted/rejected totals and distribution summary"),
 ]
 
 
@@ -224,12 +229,17 @@ def build_stage_path(
         ("stage1", "Stage 1", "decomposition lane"),
         ("stage2", "Stage 2", "mapping lane"),
         ("stage3", "Stage 3", "generation lane"),
-        ("stage4", "Stage 4", "semantic judge PCA local axis"),
-        ("stage5", "Stage 5", "filter/dedup PCA local axis"),
-        ("stage6", "Stage 6", "reward PCA local axis"),
-        ("stage7", "Stage 7", "report summary lane"),
+        ("stage4", "Stage 4", "normalization lane"),
+        ("stage5", "Stage 5", "schema validation lane"),
+        ("stage6", "Stage 6", "rule validation lane"),
+        ("stage7", "Stage 7", "safety validation lane"),
+        ("stage8", "Stage 8", "semantic judge PCA local axis"),
+        ("stage9", "Stage 9", "quality threshold lane"),
+        ("stage10", "Stage 10", "filter/dedup PCA local axis"),
+        ("stage11", "Stage 11", "reward PCA local axis"),
+        ("stage12", "Stage 12", "report summary lane"),
     ]
-    ids = [row_id(row) for row in rows_by_stage.get("stage4", [])] or [row_id(row) for row in rows_by_stage.get("input", [])]
+    ids = [row_id(row) for row in rows_by_stage.get("stage8", [])] or [row_id(row) for row in rows_by_stage.get("input", [])]
     if not ids:
         ids = sorted({row_id(row) for rows in rows_by_stage.values() for row in rows})
     lanes = {sample_id: (idx + 1) / (len(ids) + 1) for idx, sample_id in enumerate(ids)}
@@ -263,7 +273,7 @@ def build_stage_path(
         for sample_id in ids:
             lane_y = lanes.get(sample_id, 0.5)
             row = row_maps.get(stage_id, {}).get(sample_id, {})
-            fallback_row = row_maps.get("stage4", {}).get(sample_id, {})
+            fallback_row = row_maps.get("stage8", {}).get(sample_id, {})
             effective_row = row or fallback_row
             score = None
             local_x = 0.5
@@ -290,13 +300,28 @@ def build_stage_path(
                 generation = row.get("generation") or {}
                 output = str(generation.get("rewritten_text") or effective_row.get("ko_text", ""))
             elif stage_id == "stage4":
+                output = str(row.get("ko_text") or "")
+                point_label = f"{sample_id}: normalized"
+            elif stage_id == "stage5":
+                output = row_status(row)
+                point_label = f"{sample_id}: schema"
+            elif stage_id == "stage6":
+                output = row_status(row)
+                point_label = f"{sample_id}: rules"
+            elif stage_id == "stage7":
+                output = row_status(row)
+                point_label = f"{sample_id}: safety"
+            elif stage_id == "stage8":
                 pca_point = quality_points.get(sample_id, {})
                 local = quality_local.get(sample_id, {})
                 local_x = safe_score(local.get("x"), 0.5)
                 local_y = safe_score(local.get("y"), lane_y)
                 score = pca_point.get("avg")
                 output = f"{row_status(row)} · {pca_point.get('output', '')}"
-            elif stage_id == "stage5":
+            elif stage_id == "stage9":
+                output = f"{row_status(row)} · aggregate {safe_score((row.get('quality') or {}).get('aggregate'), 0):.2f}"
+                point_label = f"{sample_id}: quality"
+            elif stage_id == "stage10":
                 pca_point = postprocess_points.get(sample_id, {})
                 local = postprocess_local.get(sample_id, {})
                 local_x = safe_score(local.get("x"), 0.5)
@@ -304,15 +329,15 @@ def build_stage_path(
                 output = f"{row_status(row)} · {row.get('ko_text', '')}"
                 score = pca_point.get("avg")
                 point_label = f"{sample_id}: {row_status(row)}"
-            elif stage_id == "stage6":
+            elif stage_id == "stage11":
                 pca_point = llm_points.get(sample_id, {})
                 local = llm_local.get(sample_id, {})
                 local_x = safe_score(local.get("x"), 0.5)
                 local_y = safe_score(local.get("y"), lane_y)
                 score = pca_point.get("avg")
                 output = str(pca_point.get("output", ""))
-            elif stage_id == "stage7":
-                report = rows_by_stage.get("stage7", [{}])[0] if rows_by_stage.get("stage7") else {}
+            elif stage_id == "stage12":
+                report = rows_by_stage.get("stage12", [{}])[0] if rows_by_stage.get("stage12") else {}
                 totals = report.get("totals") or {}
                 output = f"accepted {totals.get('accepted', 0)} / rejected {totals.get('rejected', 0)}"
                 point_label = f"{sample_id}: report"
@@ -336,16 +361,31 @@ def stage_summary(stage_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     if stage_id == "stage3":
         return {"count": len(rows), "metrics": {"generated rewrites": len(rows)}}
     if stage_id == "stage4":
+        return {"count": len(rows), "metrics": {"normalized": len(rows)}}
+    if stage_id == "stage5":
+        rejected = sum(1 for row in rows if row.get("valid") is False)
+        return {"count": len(rows), "metrics": {"schema checked": len(rows), "rejected": rejected}}
+    if stage_id == "stage6":
+        rejected = sum(1 for row in rows if row.get("valid") is False)
+        return {"count": len(rows), "metrics": {"rule checked": len(rows), "rejected": rejected}}
+    if stage_id == "stage7":
+        rejected = sum(1 for row in rows if row.get("valid") is False)
+        return {"count": len(rows), "metrics": {"safety checked": len(rows), "rejected": rejected}}
+    if stage_id == "stage8":
         rejected = sum(1 for row in rows if row.get("valid") is False)
         return {"count": len(rows), "metrics": {"semantic judged": len(rows), "rejected": rejected}}
-    if stage_id == "stage5":
+    if stage_id == "stage9":
+        accepted = sum(1 for row in rows if row.get("valid") is True)
+        rejected = sum(1 for row in rows if row.get("valid") is False)
+        return {"count": len(rows), "metrics": {"quality passed": accepted, "rejected": rejected}}
+    if stage_id == "stage10":
         accepted = sum(1 for row in rows if row.get("valid") is True)
         rejected = sum(1 for row in rows if row.get("valid") is False)
         return {"count": len(rows), "metrics": {"accepted": accepted, "rejected": rejected}}
-    if stage_id == "stage6":
+    if stage_id == "stage11":
         aggregates = [safe_score((row.get("quality") or {}).get("aggregate")) for row in rows]
         return {"count": len(rows), "metrics": {"reward scored": len(rows), "avg aggregate": round(sum(aggregates) / max(len(aggregates), 1), 3)}}
-    if stage_id == "stage7":
+    if stage_id == "stage12":
         report = rows[0] if rows else {}
         totals = report.get("totals") or {}
         return {"count": len(rows), "metrics": {"accepted": totals.get("accepted", 0), "rejected": totals.get("rejected", 0)}}
@@ -368,9 +408,9 @@ def load_pipeline(curated_dir: Path) -> dict[str, Any]:
                 **stage_summary(stage_id, rows),
             }
         )
-    quality = build_pca_points(rows_by_stage["stage4"], "quality", "ko_text")
-    llm = build_pca_points(rows_by_stage["stage6"], "quality", "ko_text")
-    postprocess = build_postprocess_pca(rows_by_stage["stage5"])
+    quality = build_pca_points(rows_by_stage["stage8"], "quality", "ko_text")
+    llm = build_pca_points(rows_by_stage["stage11"], "quality", "ko_text")
+    postprocess = build_postprocess_pca(rows_by_stage["stage10"])
     stage_path = build_stage_path(rows_by_stage, quality, postprocess, llm)
     return {"stages": stages, "qualityPca": quality, "postprocessPca": postprocess, "llmPca": llm, "stagePath": stage_path}
 
@@ -427,7 +467,7 @@ def dashboard_html(payload: dict[str, Any]) -> str:
 <body>
 <main>
   <h1>Full Curator Pipeline Dashboard</h1>
-  <p>Stage1~3은 숫자 산포도를 강요하지 않고 pipeline coverage로 보여줍니다. Stage4부터 semantic judge, filter/dedup, reward 점수를 PCA와 t-SNE 양쪽 projection으로 보여줍니다.</p>
+  <p>Stage1~7은 pipeline coverage로 보여주고, Stage8 semantic, Stage10 dedup, Stage11 reward는 PCA와 t-SNE projection으로 보여줍니다.</p>
   <section class="layout">
     <aside class="panel">
       <div class="timeline" id="timeline"></div>
@@ -435,9 +475,9 @@ def dashboard_html(payload: dict[str, Any]) -> str:
     <section class="panel">
       <div class="toolbar">
         <div class="tabs">
-          <button id="qualityBtn" class="active">Stage4 Semantic</button>
-          <button id="postprocessBtn">Stage5 Filter</button>
-          <button id="llmBtn">Stage6 Reward</button>
+          <button id="qualityBtn" class="active">Stage8 Semantic</button>
+          <button id="postprocessBtn">Stage10 Dedup</button>
+          <button id="llmBtn">Stage11 Reward</button>
           <button id="pathBtn">Live Stage Path</button>
         </div>
         <div class="projection-tabs">
@@ -477,7 +517,7 @@ function setMode(next) {{
   document.getElementById("pcaBtn").disabled = mode === "stagePath";
   document.getElementById("tsneBtn").disabled = mode === "stagePath";
   document.getElementById("pathNote").textContent = mode === "stagePath"
-    ? "각 stage는 local coordinate입니다. Stage4/5/6 column을 클릭하면 해당 stage의 projection 화면으로 전환됩니다."
+    ? "각 stage는 local coordinate입니다. Stage8/10/11 column을 클릭하면 해당 projection 화면으로 전환됩니다."
     : "";
   if (animationHandle && mode !== "stagePath") {{
     cancelAnimationFrame(animationHandle);
@@ -602,7 +642,7 @@ function renderPath() {{
   frames.forEach(frame => {{
     const stageX = 0.08 + (frames.indexOf(frame) / Math.max(frames.length - 1, 1)) * 0.84;
     const x = pathPixel({{x: stageX, y: 0.5}}).x;
-    const targetMode = frame.id === "stage4" ? "qualityPca" : frame.id === "stage5" ? "postprocessPca" : frame.id === "stage6" ? "llmPca" : null;
+    const targetMode = frame.id === "stage8" ? "qualityPca" : frame.id === "stage10" ? "postprocessPca" : frame.id === "stage11" ? "llmPca" : null;
     if (targetMode) {{
       stageClickTargets.push({{mode: targetMode, x1: x - 46, x2: x + 46, y1: 0, y2: canvas.height}});
       ctx.fillStyle = "rgba(21,94,239,0.06)";
@@ -758,9 +798,9 @@ def main() -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(dashboard_html(payload), encoding="utf-8")
     print(f"Saved full pipeline dashboard to: {output}")
-    print(f"Stage4 semantic PCA keys: {', '.join(payload['qualityPca']['keys'])}")
-    print(f"Stage5 filter PCA keys: {', '.join(payload['postprocessPca']['keys'])}")
-    print(f"Stage6 reward PCA keys: {', '.join(payload['llmPca']['keys'])}")
+    print(f"Stage8 semantic PCA keys: {', '.join(payload['qualityPca']['keys'])}")
+    print(f"Stage10 dedup PCA keys: {', '.join(payload['postprocessPca']['keys'])}")
+    print(f"Stage11 reward PCA keys: {', '.join(payload['llmPca']['keys'])}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,17 @@
 from __future__ import annotations
+
+"""Stage 7: batch summary report generation.
+
+Input record shape:
+`stage6.jsonl` rows after all filtering and reward scoring.
+
+Output artifacts:
+- `stage7.jsonl`: compact JSONL summary row written by `generate.py`
+- `validation/report.json`: detailed report
+- `validation/accepted.jsonl`
+- `validation/rejected.jsonl`
+"""
+
 import json
 from collections import Counter
 from pathlib import Path

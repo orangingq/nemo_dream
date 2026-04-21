@@ -1,4 +1,16 @@
 from __future__ import annotations
+
+"""Stage 6: reward-model evaluation.
+
+Input record shape:
+`stage5.jsonl` rows that already include `metadata`, `quality.aggregate`,
+`valid`, and `reject_reasons`.
+
+Output record shape (`stage6.jsonl`):
+- same row contract as Stage 5
+- `quality.reward` is added for rows that remain valid
+"""
+
 from pipeline.judges.protocol import Judge
 from pipeline.schema import Record
 from pipeline.stages.base import RecordStage

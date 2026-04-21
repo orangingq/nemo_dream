@@ -9,11 +9,13 @@ class Pipeline:
     def __init__(self, stages: list[Stage]):
         self.stages = stages
 
-    def run(self, records: list[Record]) -> list[Record]:
+    def run(self, records: list[Record], after_stage=None) -> list[Record]:
         for stage in self.stages:
             print(f"[{stage.name}] start: {sum(r.valid for r in records)} valid")
             records = stage.run(records)
             print(f"[{stage.name}] done:  {sum(r.valid for r in records)} valid")
+            if after_stage is not None:
+                after_stage(stage, records)
         return records
 
 
