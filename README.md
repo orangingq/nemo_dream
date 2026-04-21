@@ -2,41 +2,43 @@
 
 English-to-Korean localization data curation pipeline for hackathon demos.
 
-This repo now has two connected pieces:
+This repo now has three connected pieces:
 
+- `scripts/run_from_seed.py`: full seed-to-report runner
+- `scripts/build_curated_stages.py`: Stage1~3 NIM generation from seed text
 - `pipeline/`: curator-style validation/evaluation stages from `feat/mockup-pipeline`
-- `curated_pipeline_dashboard.py`: visualization dashboard for `data/curated/stage1` through `stage7`
+- `dashboard.py`: visualization dashboard for `data/curated/stage1` through `stage7`
 
-The important integration point is `pipeline/stages/s0_generate.py`: it can normalize external curated JSONL files into the schema expected by the validation stages.
+The full flow starts from seed English text, builds Stage1~3 with NIM, then feeds Stage3 into the validation/evaluation stages. The important integration point is `pipeline/stages/s0_generate.py`: it normalizes Stage3 or Stage4-style JSONL into the schema expected by the validation stages.
 
 ## Pipeline Stages
 
 | Stage | File | Purpose |
 | --- | --- | --- |
-| S0 | `pipeline/stages/s0_generate.py` | Generate new data or normalize existing curated JSONL into pipeline `Sample` records |
-| S1 | `pipeline/stages/s1_schema.py` | Validate schema with Pydantic |
-| S2 | `pipeline/stages/s2_rules.py` | Rule checks for laughter, register, ASCII ratio, cultural refs, length, emoji |
-| S3 | `pipeline/stages/s3_safety.py` | PII and content-safety checks |
-| S4 | `pipeline/stages/s4_semantic.py` | Semantic/property/naturalness/cultural/register evaluation |
-| S5 | `pipeline/stages/s5_filter.py` | Aggregate quality filtering and fuzzy dedup |
-| S6 | `pipeline/stages/s6_reward.py` | Reward scoring |
-| S7 | `pipeline/stages/s7_report.py` | Report and chart output |
+| Stage 1 | `scripts/build_curated_stages.py` | NIM sociolinguistic decomposition from seed English text |
+| Stage 2 | `scripts/build_curated_stages.py` | NIM cultural reference mapping |
+| Stage 3 | `scripts/build_curated_stages.py` | NIM Korean rewrite generation |
+| Stage 4 | `pipeline/stages/s1_schema.py`, `s2_rules.py`, `s3_safety.py` | Schema, rule, and safety validation after S0 normalization |
+| Stage 5 | `pipeline/stages/s4_semantic.py`, `s5_filter.py` | Semantic/property evaluation and aggregate filtering |
+| Stage 6 | `pipeline/stages/s5_filter.py`, `s6_reward.py` | Dedup and reward scoring |
+| Stage 7 | `pipeline/stages/s7_report.py` | Report and chart output |
 
 ## Data Flow
 
-External curated data lives under `data/curated/`:
+Curated data lives under `data/curated/`:
 
 ```text
-data/curated/stage1.jsonl              decomposition output from another repo
-data/curated/stage2.jsonl              cultural mapping output
-data/curated/stage3.jsonl              Korean rewrite generation output
+data/curated/prosocial_input.jsonl     seed English text
+data/curated/stage1.jsonl              Stage1 decomposition output
+data/curated/stage2.jsonl              Stage2 cultural mapping output
+data/curated/stage3.jsonl              Stage3 Korean rewrite generation output
 data/curated/stage4.jsonl              semantic judge style records
 data/curated/stage5_postprocessed.jsonl
 data/curated/stage6_evaluated.jsonl
 data/curated/stage7_report.jsonl
 ```
 
-`stage1` to `stage3` use the external repo's shape, for example `decomposed`, `mapped_refs`, and `generation.rewritten_text`.
+`stage1` to `stage3` use the `nemo_dream_step1` shape, for example `decomposed`, `mapped_refs`, and `generation.rewritten_text`.
 
 `stage4` is closer to the validation pipeline shape, with `en_text`, `ko_text`, `metadata`, `quality`, and `valid`.
 
@@ -70,16 +72,53 @@ S0 supports both forms and normalizes them into this shape before S1:
 
 ## Quick Start
 
-Run the validation/evaluation pipeline from the external `stage4` data:
+Start from seed data and run the full pipeline:
 
 ```bash
-python -m pipeline.run \
-  generate.source_jsonl=data/curated/stage4.jsonl \
-  generate.out_jsonl=/tmp/stage4_s0_normalized.jsonl \
-  report.chart=false
+export NVIDIA_API_KEY=nvapi-...
+
+python scripts/import_prosocial_dialog.py \
+  --split train \
+  --limit 10 \
+  --safety-label __casual__ \
+  --output data/curated/prosocial_input.jsonl
+
+python scripts/run_from_seed.py \
+  --input data/curated/prosocial_input.jsonl \
+  --curated-dir data/curated \
+  --limit 10 \
+  --normalized-out raw/prosocial_normalized.jsonl \
+  --validation-out-dir val_out_prosocial \
+  --no-chart
 ```
 
-Run from `stage3` generation output instead:
+The full runner executes:
+
+```text
+seed JSONL
+-> Stage1 NIM decomposition
+-> Stage2 NIM cultural mapping
+-> Stage3 NIM Korean rewrite
+-> S0 normalize Stage3 output
+-> Stage4 schema/rules/safety
+-> Stage5 semantic/filter
+-> Stage6 dedup/reward
+-> Stage7 report
+```
+
+Outputs are written to:
+
+```text
+data/curated/stage1.jsonl
+data/curated/stage2.jsonl
+data/curated/stage3.jsonl
+raw/prosocial_normalized.jsonl
+val_out_prosocial/accepted.jsonl
+val_out_prosocial/rejected.jsonl
+val_out_prosocial/report.json
+```
+
+You can also start from an existing generated stage file. Run Stage4+ validation/evaluation from `stage3` generation output:
 
 ```bash
 python -m pipeline.run \
@@ -88,25 +127,13 @@ python -m pipeline.run \
   report.chart=false
 ```
 
-Outputs are written to:
+Or start from existing `stage4` data:
 
-```text
-val_out/accepted.jsonl
-val_out/rejected.jsonl
-val_out/report.json
-```
-
-The command runs this sequence:
-
-```text
-S0 normalize curated data
--> S1 schema
--> S2 rules
--> S3 safety
--> S4 semantic
--> S5 filter/dedup
--> S6 reward
--> S7 report
+```bash
+python -m pipeline.run \
+  generate.source_jsonl=data/curated/stage4.jsonl \
+  generate.out_jsonl=/tmp/stage4_s0_normalized.jsonl \
+  report.chart=false
 ```
 
 ## Config
@@ -120,7 +147,7 @@ conf/config.yaml
 Useful overrides:
 
 ```bash
-# Choose an input JSONL from data/curated
+# Choose an input JSONL from data/curated for Stage4+ validation
 python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl
 
 # Write normalized S0 output somewhere explicit
@@ -167,41 +194,101 @@ Generated raw candidates go to:
 raw/generated.jsonl
 ```
 
+## Prosocial Dialog Seed Data
+
+You can seed the pipeline from AllenAI's Prosocial Dialog dataset:
+
+```bash
+python scripts/import_prosocial_dialog.py \
+  --split train \
+  --limit 100 \
+  --text-field context \
+  --output data/curated/prosocial_input.jsonl
+```
+
+Useful filters:
+
+```bash
+# Safer casual examples only
+python scripts/import_prosocial_dialog.py \
+  --split train \
+  --limit 100 \
+  --safety-label __casual__ \
+  --output data/curated/prosocial_input.jsonl
+
+# Use both user context and assistant response as the seed text
+python scripts/import_prosocial_dialog.py \
+  --split train \
+  --limit 100 \
+  --text-field context_response \
+  --output data/curated/prosocial_input.jsonl
+```
+
+The importer writes records like `{"id": "...", "text": "..."}` plus metadata. Use this as the raw seed input for the Stage1 decomposition/generation workflow, then rebuild the dashboard from the resulting curated stage files.
+
+## Build Stage1~3 Curated Files
+
+Stage1~3 can be generated locally from seed text, following the flow in `jwee01/nemo_dream_step1`:
+
+```text
+seed text
+-> Stage1 sociolinguistic decomposition
+-> Stage2 cultural reference mapping
+-> Stage3 Korean rewrite generation
+```
+
+This path always uses NIM for Stage1 decomposition, Stage2 cultural mapping, and Stage3 Korean rewriting:
+
+```bash
+export NVIDIA_API_KEY=nvapi-...
+python scripts/build_curated_stages.py \
+  --input data/curated/prosocial_input.jsonl \
+  --out-dir data/curated \
+  --limit 10
+```
+
+The command writes:
+
+```text
+data/curated/stage1.jsonl
+data/curated/stage2.jsonl
+data/curated/stage3.jsonl
+```
+
+Then run the existing Stage4+ validation/evaluation path from the generated Stage3 file:
+
+```bash
+python scripts/run_from_seed.py \
+  --input data/curated/prosocial_input.jsonl \
+  --curated-dir data/curated \
+  --limit 10 \
+  --normalized-out raw/prosocial_normalized.jsonl \
+  --validation-out-dir val_out_prosocial \
+  --no-chart
+```
+
 ## Visualization Dashboard
 
 Build a static dashboard from the curated stage files:
 
 ```bash
-python curated_pipeline_dashboard.py \
+python dashboard.py \
   --curated-dir data/curated \
-  --output artifacts/curated_pipeline_dashboard.html
+  --output artifacts/dashboard.html
 ```
 
 Serve a live dashboard that refreshes when `data/curated` files change:
 
 ```bash
-python curated_pipeline_dashboard.py --serve --curated-dir data/curated --port 8767
+python dashboard.py --serve --curated-dir data/curated --host 0.0.0.0 --port 8770
 ```
 
 Then open:
 
 ```text
-http://127.0.0.1:8767
+http://127.0.0.1:8770
 ```
 
-The older distribution dashboard is still available:
-
-```bash
-python evaluator.py --input data/example_generated_data.jsonl --output data/evaluated_data.jsonl --mode heuristic
-python visualize_distribution.py --generated data/example_generated_data.jsonl --evaluated data/evaluated_data.jsonl
-python dashboard_server.py --generated data/example_generated_data.jsonl --evaluated data/evaluated_data.jsonl --reference data/raw/sample_chat_en.jsonl
-```
-
-Default URL for `dashboard_server.py`:
-
-```text
-http://127.0.0.1:8765
-```
 
 ## Mockup Fixtures
 
@@ -236,7 +323,7 @@ Some NeMo Curator reference classes need heavier optional packages and compatibl
 
 ```bash
 python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl report.chart=false
-python curated_pipeline_dashboard.py --serve --curated-dir data/curated --port 8767
+python dashboard.py --serve --curated-dir data/curated --host 0.0.0.0 --port 8770
 ```
 
 ## Repository Layout
@@ -249,6 +336,5 @@ pipeline/stages/              individual stage implementations
 mockup-data/                  fixture data from feat/mockup-pipeline
 data/curated/                 external curated stage data + dashboard inputs
 artifacts/                    generated dashboard and visualization artifacts
-curated_pipeline_dashboard.py curated stage dashboard builder/server
-visualize_distribution.py     PCA distribution visualization
+dashboard.py                  curated stage dashboard builder/server
 ```

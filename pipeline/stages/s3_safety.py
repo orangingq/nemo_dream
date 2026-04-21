@@ -131,7 +131,7 @@ class NemoAegisSafetyStage(ProcessingStage[DocumentBatch, DocumentBatch]):
 class NemoNemoguardSafetyStage(ProcessingStage[DocumentBatch, DocumentBatch]):
     """Curator-native safety screen via NIM `llama-3.1-nemoguard-8b-content-safety`.
 
-    Calls the hosted NIM endpoint per row using ChatNVIDIA. Writes an
+    Calls the OpenAI-compatible NIM endpoint per row. Writes an
     `_nemoguard_verdict` column with raw JSON from the safety model.
     """
 
@@ -143,10 +143,12 @@ class NemoNemoguardSafetyStage(ProcessingStage[DocumentBatch, DocumentBatch]):
         base_url: str = "https://integrate.api.nvidia.com/v1",
         text_field: str = "ko_text",
     ):
-        from langchain_nvidia_ai_endpoints import ChatNVIDIA  # lazy: needs NVIDIA_API_KEY at runtime
         import os
+        from openai import OpenAI
         self.text_field = text_field
-        self.llm = ChatNVIDIA(model=model, api_key=os.environ["NVIDIA_API_KEY"], base_url=base_url)
+        self.model = model
+        api_key = "no-key" if base_url.startswith(("http://localhost", "http://127.0.0.1")) else os.environ["NVIDIA_API_KEY"]
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def inputs(self) -> tuple[list[str], list[str]]:
         return ["data"], [self.text_field]
@@ -155,12 +157,14 @@ class NemoNemoguardSafetyStage(ProcessingStage[DocumentBatch, DocumentBatch]):
         return ["data"], [self.text_field, "_nemoguard_verdict"]
 
     def process(self, batch: DocumentBatch) -> DocumentBatch:
-        from langchain_core.messages import HumanMessage
         df = batch.to_pandas().copy()
         verdicts = []
         for text in df[self.text_field].astype(str):
-            msg = self.llm.invoke([HumanMessage(content=text)])
-            verdicts.append(msg.content)
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": text}],
+            )
+            verdicts.append(resp.choices[0].message.content)
         df["_nemoguard_verdict"] = verdicts
         return DocumentBatch(
             task_id=f"{batch.task_id}_{self.name}",

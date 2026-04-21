@@ -1,0 +1,2 @@
+- generate.source_jsonl=data/curated/stage4.jsonl
+- report.chart=false

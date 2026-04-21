@@ -124,7 +124,7 @@ class NemoSemanticEmbeddingStage(ProcessingStage[DocumentBatch, DocumentBatch]):
 class NemoNimJudgeStage(ProcessingStage[DocumentBatch, DocumentBatch]):
     """Curator-native property judge via NIM Nemotron-3 super.
 
-    Calls the hosted NIM endpoint per row using ChatNVIDIA. Writes raw JSON
+    Calls the OpenAI-compatible NIM endpoint per row. Writes raw JSON
     verdicts to `_property_judge` column.
     """
 
@@ -137,11 +137,13 @@ class NemoNimJudgeStage(ProcessingStage[DocumentBatch, DocumentBatch]):
         en_field: str = "en_text",
         ko_field: str = "ko_text",
     ):
-        from langchain_nvidia_ai_endpoints import ChatNVIDIA
         import os
+        from openai import OpenAI
         self.en_field = en_field
         self.ko_field = ko_field
-        self.llm = ChatNVIDIA(model=model, api_key=os.environ["NVIDIA_API_KEY"], base_url=base_url)
+        self.model = model
+        api_key = "no-key" if base_url.startswith(("http://localhost", "http://127.0.0.1")) else os.environ["NVIDIA_API_KEY"]
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def inputs(self) -> tuple[list[str], list[str]]:
         return ["data"], [self.en_field, self.ko_field]
@@ -150,15 +152,18 @@ class NemoNimJudgeStage(ProcessingStage[DocumentBatch, DocumentBatch]):
         return ["data"], [self.en_field, self.ko_field, "_property_judge"]
 
     def process(self, batch: DocumentBatch) -> DocumentBatch:
-        from langchain_core.messages import HumanMessage, SystemMessage
         df = batch.to_pandas().copy()
         verdicts = []
         for en, ko in zip(df[self.en_field].astype(str), df[self.ko_field].astype(str)):
-            msg = self.llm.invoke([
-                SystemMessage(content="Score property/naturalness/cultural/register 1-5 as JSON."),
-                HumanMessage(content=f"EN:\n{en}\nKO:\n{ko}"),
-            ])
-            verdicts.append(msg.content)
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "Score property/naturalness/cultural/register 1-5 as JSON."},
+                    {"role": "user", "content": f"EN:\n{en}\nKO:\n{ko}"},
+                ],
+                response_format={"type": "json_object"},
+            )
+            verdicts.append(resp.choices[0].message.content)
         df["_property_judge"] = verdicts
         return DocumentBatch(
             task_id=f"{batch.task_id}_{self.name}",

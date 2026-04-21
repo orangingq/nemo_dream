@@ -1,17 +1,28 @@
 {
   "totals": {
-    "input": 11,
+    "input": 22,
     "accepted": 6,
-    "rejected": 5
+    "rejected": 16
   },
   "reject_by_stage": {
-    "S5": 1,
-    "S4": 4
+    "S1": 2,
+    "S2": 6,
+    "S3": 3,
+    "S4": 4,
+    "S5": 1
   },
   "reject_by_rule": {
-    "dedup": 1,
+    "S1": 2,
+    "R2_laughter": 2,
+    "R3_register_honorific": 1,
+    "R3_register_plain": 1,
+    "R4_ascii": 2,
+    "pii_rrn": 1,
+    "pii_phone": 1,
+    "content_safety": 1,
     "semantic_drift": 1,
-    "axis_floor": 3
+    "axis_floor": 3,
+    "dedup": 1
   },
   "accepted_distribution": {
     "speech_act": {

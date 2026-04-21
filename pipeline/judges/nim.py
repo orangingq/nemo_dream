@@ -2,8 +2,7 @@ from __future__ import annotations
 import json
 import os
 import numpy as np
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
+from openai import OpenAI
 from pipeline.schema import Sample
 
 
@@ -40,34 +39,22 @@ class NimJudge:
         max_tokens: int = 512,
         temperature: float = 0.0,
     ):
-        api_key = os.environ["NVIDIA_API_KEY"]
+        api_key = _api_key_for(base_url)
         self.models = models
         self.max_tokens = max_tokens
         self.temperature = temperature
-
-        common = {"api_key": api_key, "base_url": base_url}
-        self.safety_llm = ChatNVIDIA(model=models["safety"], temperature=temperature, **common)
-        self.translate_llm = ChatNVIDIA(
-            model=models["translate"], temperature=temperature,
-            max_completion_tokens=max_tokens, **common,
-        )
-        self.judge_llm = ChatNVIDIA(
-            model=models["judge"], temperature=temperature,
-            max_completion_tokens=max_tokens, **common,
-        )
-        self.reward_llm = ChatNVIDIA(model=models["reward"], **common)
-        self.embed = NVIDIAEmbeddings(model=models["embed"], **common)
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def safety(self, text: str) -> dict:
-        msg = self.safety_llm.invoke([HumanMessage(content=text)])
-        payload = json.loads(msg.content)
+        content = self._chat(self.models["safety"], [{"role": "user", "content": text}])
+        payload = json.loads(content)
         toxic = any(payload.get(k, "no") == "yes" for k in payload if k.startswith("S"))
         return {"toxic": toxic, "category": payload.get("violations")}
 
     def semantic_cosine(self, en: str, ko: str) -> float:
         bt = self._back_translate(ko)
-        v1 = np.asarray(self.embed.embed_query(en))
-        v2 = np.asarray(self.embed.embed_query(bt))
+        v1 = np.asarray(self._embed(en))
+        v2 = np.asarray(self._embed(bt))
         return float(v1 @ v2 / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
     def property_judge(self, sample: Sample) -> dict:
@@ -82,31 +69,65 @@ class NimJudge:
             age=meta.estimated_age_group, pf=meta.target_platform,
             ko=sample.ko_text, refs=refs,
         )
-        msg = self.judge_llm.invoke(
-            [HumanMessage(content=prompt)],
+        content = self._chat(
+            self.models["judge"],
+            [{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
         )
-        return json.loads(msg.content)
+        return json.loads(content)
 
     def reward(self, en: str, ko: str) -> dict:
-        msg = self.reward_llm.invoke([
-            HumanMessage(content=en),
-            AIMessage(content=ko),
-        ])
-        return _parse_reward(msg)
+        resp = self.client.chat.completions.create(
+            model=self.models["reward"],
+            messages=[
+                {"role": "user", "content": en},
+                {"role": "assistant", "content": ko},
+            ],
+            logprobs=True,
+        )
+        return _parse_reward(resp)
 
     def _back_translate(self, ko: str) -> str:
-        msg = self.translate_llm.invoke([
-            SystemMessage(content=BACK_TRANSLATE_SYS),
-            HumanMessage(content=ko),
-        ])
-        return msg.content
+        return self._chat(
+            self.models["translate"],
+            [
+                {"role": "system", "content": BACK_TRANSLATE_SYS},
+                {"role": "user", "content": ko},
+            ],
+        )
+
+    def _chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        response_format: dict | None = None,
+    ) -> str:
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+        resp = self.client.chat.completions.create(**kwargs)
+        return resp.choices[0].message.content or ""
+
+    def _embed(self, text: str) -> list[float]:
+        resp = self.client.embeddings.create(model=self.models["embed"], input=text)
+        return resp.data[0].embedding
 
 
-def _parse_reward(msg) -> dict:
-    meta = msg.response_metadata or {}
-    logprobs = meta.get("logprobs") or {}
-    content = logprobs.get("content") or []
+def _api_key_for(base_url: str) -> str:
+    if base_url.startswith("http://localhost") or base_url.startswith("http://127.0.0.1"):
+        return os.environ.get("NVIDIA_API_KEY", "no-key")
+    return os.environ["NVIDIA_API_KEY"]
+
+
+def _parse_reward(resp) -> dict:
+    choice = resp.choices[0]
+    logprobs = getattr(choice, "logprobs", None)
+    content = getattr(logprobs, "content", None) if logprobs else None
     if not content:
         raise RuntimeError("reward response missing logprobs.content")
-    return {tok["token"]: tok["logprob"] for tok in content}
+    return {tok.token: tok.logprob for tok in content}

@@ -1,0 +1,61 @@
+{
+  "holidays": [
+    {"en": "thanksgiving", "ko": "추석", "notes": "family harvest holiday"},
+    {"en": "christmas", "ko": "크리스마스", "notes": "couple/friend event in Korea"},
+    {"en": "halloween", "ko": "핼러윈", "notes": "young-adult costume party context"},
+    {"en": "fourth of july", "ko": "광복절", "approximate": true, "notes": "national holiday analogue"},
+    {"en": "4th of july", "ko": "광복절", "approximate": true, "notes": "national holiday analogue"},
+    {"en": "new year's eve", "ko": "새해맞이"}
+  ],
+  "brands": [
+    {"en": "venmo", "ko": "토스", "type": "service", "notes": "peer-to-peer payment"},
+    {"en": "zelle", "ko": "카카오페이", "type": "service"},
+    {"en": "doordash", "ko": "배달의민족", "type": "service"},
+    {"en": "uber", "ko": "카카오택시", "type": "service"},
+    {"en": "lyft", "ko": "타다", "type": "service"},
+    {"en": "amazon", "ko": "쿠팡", "type": "brand"},
+    {"en": "google", "ko": "네이버", "type": "brand"},
+    {"en": "whatsapp", "ko": "카카오톡", "type": "service"},
+    {"en": "imessage", "ko": "카카오톡", "type": "service"},
+    {"en": "starbucks", "ko": "스타벅스", "type": "brand", "keep": true},
+    {"en": "trader joe's", "ko": "이마트", "type": "brand", "approximate": true},
+    {"en": "iphone", "ko": "아이폰", "type": "brand", "keep": true},
+    {"en": "netflix", "ko": "넷플릭스", "type": "service", "keep": true}
+  ],
+  "events": [
+    {"en": "prom", "ko": "졸업 파티", "approximate": true, "notes": "no exact Korean equivalent"},
+    {"en": "homecoming", "ko": "학교 축제", "approximate": true},
+    {"en": "spring break", "ko": "개강 전 여행", "approximate": true},
+    {"en": "sat", "ko": "수능", "notes": "college entrance exam"},
+    {"en": "frat party", "ko": "동아리 뒤풀이", "approximate": true},
+    {"en": "dorm move-in", "ko": "기숙사 입주"},
+    {"en": "tour dates", "ko": "공연 일정"}
+  ],
+  "food": [
+    {"en": "pumpkin spice latte", "ko": "고구마 라떼", "approximate": true, "notes": "seasonal fall drink trope"},
+    {"en": "pumpkin spice", "ko": "고구마", "approximate": true},
+    {"en": "thanksgiving turkey", "ko": "송편", "approximate": true, "notes": "holiday staple food"},
+    {"en": "turkey", "ko": "칠면조"},
+    {"en": "root beer", "ko": "식혜", "approximate": true},
+    {"en": "peanut butter sandwich", "ko": "김밥", "approximate": true},
+    {"en": "burrito", "ko": "부리또", "keep": true},
+    {"en": "caramel macchiato", "ko": "카라멜 마키아토", "keep": true},
+    {"en": "burgers", "ko": "버거"}
+  ],
+  "pop_culture": [
+    {"en": "snl", "ko": "SNL 코리아", "approximate": true},
+    {"en": "superbowl", "ko": "월드컵 결승", "approximate": true},
+    {"en": "taylor swift", "ko": "테일러 스위프트", "keep": true},
+    {"en": "taylor", "ko": "테일러", "keep": true},
+    {"en": "tiktok dance", "ko": "챌린지"},
+    {"en": "stranger things", "ko": "기묘한 이야기"}
+  ],
+  "slang": [
+    {"en": "fam", "ko": "친구들", "type": "slang"},
+    {"en": "roomie", "ko": "룸메", "type": "slang"},
+    {"en": "bro", "ko": "야", "type": "slang"},
+    {"en": "lmao", "ko": "ㅋㅋ", "type": "slang"},
+    {"en": "lol", "ko": "ㅋㅋ", "type": "slang"}
+  ],
+  "retrieved": []
+}
