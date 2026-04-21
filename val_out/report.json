@@ -1,0 +1,102 @@
+{
+  "totals": {
+    "input": 11,
+    "accepted": 6,
+    "rejected": 5
+  },
+  "reject_by_stage": {
+    "S5": 1,
+    "S4": 4
+  },
+  "reject_by_rule": {
+    "dedup": 1,
+    "semantic_drift": 1,
+    "axis_floor": 3
+  },
+  "accepted_distribution": {
+    "speech_act": {
+      "complaint": 2,
+      "brag": 1,
+      "question": 1,
+      "empathy_seeking": 1,
+      "sarcasm": 1
+    },
+    "register": {
+      "casual": 4,
+      "formal": 1,
+      "public": 1
+    },
+    "estimated_age_group": {
+      "30s": 3,
+      "20s": 2,
+      "teen": 1
+    },
+    "target_platform": {
+      "twitter": 3,
+      "reddit": 2,
+      "instagram": 1
+    }
+  },
+  "quality_summary": {
+    "semantic_cosine": {
+      "count": 6.0,
+      "mean": 0.85,
+      "std": 0.0,
+      "min": 0.85,
+      "25%": 0.85,
+      "50%": 0.85,
+      "75%": 0.85,
+      "max": 0.85
+    },
+    "property_preservation": {
+      "count": 6.0,
+      "mean": 4.333333333333333,
+      "std": 0.5163977794943223,
+      "min": 4.0,
+      "25%": 4.0,
+      "50%": 4.0,
+      "75%": 4.75,
+      "max": 5.0
+    },
+    "naturalness": {
+      "count": 6.0,
+      "mean": 5.0,
+      "std": 0.0,
+      "min": 5.0,
+      "25%": 5.0,
+      "50%": 5.0,
+      "75%": 5.0,
+      "max": 5.0
+    },
+    "cultural_appropriateness": {
+      "count": 6.0,
+      "mean": 5.0,
+      "std": 0.0,
+      "min": 5.0,
+      "25%": 5.0,
+      "50%": 5.0,
+      "75%": 5.0,
+      "max": 5.0
+    },
+    "register_consistency": {
+      "count": 6.0,
+      "mean": 5.0,
+      "std": 0.0,
+      "min": 5.0,
+      "25%": 5.0,
+      "50%": 5.0,
+      "75%": 5.0,
+      "max": 5.0
+    },
+    "aggregate": {
+      "count": 6.0,
+      "mean": 4.720833333333333,
+      "std": 0.12909944487358055,
+      "min": 4.6375,
+      "25%": 4.6375,
+      "50%": 4.6375,
+      "75%": 4.825,
+      "max": 4.8875
+    }
+  }
+}

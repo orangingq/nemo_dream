@@ -1,0 +1,59 @@
+defaults:
+  - judge: mock
+  - _self_
+
+paths:
+  candidates: mockup-data/candidates.jsonl
+  out_dir: val_out
+
+generate:
+  enabled: false
+  source_jsonl: null
+  api_key_env: NVIDIA_API_KEY
+  artifact_path: raw/
+  dataset_name: nemo_dream_seed
+  model_alias: nemotron-nano-v3
+  model_id: nvidia/nemotron-3-nano-30b-a3b
+  model_provider: nvidia
+  temperature: 0.7
+  top_p: 0.95
+  max_tokens: 1024
+  max_parallel_requests: 8
+  num_samples: 20
+  batch_size: 10
+  out_jsonl: raw/generated.jsonl
+  samplers:
+    speech_act: [complaint, question, sarcasm, advice, announce]
+    register: [intimate, casual, public, formal]
+    platform: [twitter, reddit, community, linkedin, instagram_story, faq]
+
+thresholds:
+  semantic_cosine_floor: 0.5
+  axis_floor: 2
+  aggregate: 3.5
+  ascii_ratio_max: 0.20
+  honorific_ratio:
+    intimate_max: 0.10
+    formal_min: 0.05
+  length:
+    min_chars: 5
+    max_chars: 1000
+    ratio_min: 0.3
+    ratio_max: 2.5
+  emoji:
+    formal_max: 0
+    casual_max: 5
+
+dedup:
+  jaccard_threshold: 0.8
+  num_perm: 128
+
+quality_weights:
+  semantic: 0.15
+  property: 0.25
+  naturalness: 0.25
+  cultural: 0.20
+  register: 0.15
+
+report:
+  chart: true
