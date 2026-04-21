@@ -9,7 +9,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the unified seed -> stage7 pipeline.",
     )
-    parser.add_argument("--input", default="data/curated/prosocial_input.jsonl")
+    parser.add_argument("--input", default="data/curated/stage0.jsonl")
     parser.add_argument("--curated-dir", default="data/curated")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--model", default=None)

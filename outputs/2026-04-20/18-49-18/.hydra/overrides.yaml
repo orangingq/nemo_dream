@@ -1,4 +1,0 @@
-- generate.enabled=true
-- generate.source_jsonl=data/curated/stage4.jsonl
-- generate.out_jsonl=/tmp/stage4_s0_normalized.jsonl
-- report.chart=false

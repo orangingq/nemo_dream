@@ -35,7 +35,7 @@ STAGE_FILES = [
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a full curated-pipeline dashboard.")
     parser.add_argument("--curated-dir", default="data/curated")
-    parser.add_argument("--output", default="artifacts/dashboard.html")
+    parser.add_argument("--output", default="dashboard.html")
     parser.add_argument("--serve", action="store_true", help="Serve the dashboard and live-refresh payload from JSONL files.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8770)

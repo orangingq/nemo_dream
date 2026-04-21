@@ -3,14 +3,14 @@ defaults:
   - _self_
 
 paths:
-  candidates: mockup-data/candidates.jsonl
-  out_dir: val_out
+  candidates: data/curated/stage4.jsonl
+  out_dir: data/curated/validation
 
 generate:
   enabled: false
   source_jsonl: null
   api_key_env: NVIDIA_API_KEY
-  artifact_path: raw/
+  artifact_path: data/curated/raw/
   dataset_name: nemo_dream_seed
   model_alias: nemotron-nano-v3
   model_id: nvidia/nemotron-3-nano-30b-a3b
@@ -21,7 +21,7 @@ generate:
   max_parallel_requests: 8
   num_samples: 20
   batch_size: 10
-  out_jsonl: raw/generated.jsonl
+  out_jsonl: data/curated/raw/generated.jsonl
   samplers:
     speech_act: [complaint, question, sarcasm, advice, announce]
     register: [intimate, casual, public, formal]

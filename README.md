@@ -192,7 +192,7 @@ python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl generate.
 python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl report.chart=false
 
 # Change output directory
-python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl paths.out_dir=val_out_stage4
+python -m pipeline.run generate.source_jsonl=data/curated/stage4.jsonl paths.out_dir=data/curated/validation_alt
 ```
 
 Default judge config is mock mode:
@@ -226,7 +226,7 @@ python -m pipeline.run generate.enabled=true generate.num_samples=20
 Generated raw candidates go to:
 
 ```text
-raw/generated.jsonl
+data/curated/raw/generated.jsonl
 ```
 
 ## Prosocial Dialog Seed Data
@@ -238,7 +238,7 @@ python scripts/import_prosocial_dialog.py \
   --split train \
   --limit 100 \
   --text-field context \
-  --output data/curated/prosocial_input.jsonl
+  --output data/curated/stage0.jsonl
 ```
 
 Useful filters:
@@ -249,14 +249,14 @@ python scripts/import_prosocial_dialog.py \
   --split train \
   --limit 100 \
   --safety-label __casual__ \
-  --output data/curated/prosocial_input.jsonl
+  --output data/curated/stage0.jsonl
 
 # Use both user context and assistant response as the seed text
 python scripts/import_prosocial_dialog.py \
   --split train \
   --limit 100 \
   --text-field context_response \
-  --output data/curated/prosocial_input.jsonl
+  --output data/curated/stage0.jsonl
 ```
 
 The importer writes records like `{"id": "...", "text": "..."}` plus metadata. Use this as the raw seed input for the Stage1 decomposition/generation workflow, then rebuild the dashboard from the resulting curated stage files.
@@ -277,7 +277,7 @@ This path always uses NIM for Stage1 decomposition, Stage2 cultural mapping, and
 ```bash
 export NVIDIA_API_KEY=nvapi-...
 python scripts/build_curated_stages.py \
-  --input data/curated/prosocial_input.jsonl \
+  --input data/curated/stage0.jsonl \
   --out-dir data/curated \
   --limit 10
 ```
@@ -294,11 +294,9 @@ Then run the existing Stage4+ validation/evaluation path from the generated Stag
 
 ```bash
 python scripts/run_from_seed.py \
-  --input data/curated/prosocial_input.jsonl \
+  --input data/curated/stage0.jsonl \
   --curated-dir data/curated \
   --limit 10 \
-  --normalized-out raw/prosocial_normalized.jsonl \
-  --validation-out-dir val_out_prosocial \
   --no-chart
 ```
 
@@ -309,7 +307,7 @@ Build a static dashboard from the curated stage files:
 ```bash
 python dashboard.py \
   --curated-dir data/curated \
-  --output artifacts/dashboard.html
+  --output dashboard.html
 ```
 
 Serve a live dashboard that refreshes when `data/curated` files change:
@@ -322,28 +320,6 @@ Then open:
 
 ```text
 http://127.0.0.1:8770
-```
-
-
-## Mockup Fixtures
-
-The original mockup pipeline fixtures are in:
-
-```text
-mockup-data/candidates.jsonl
-mockup-data/expected-outcomes.json
-```
-
-Run the default mockup pipeline:
-
-```bash
-python -m pipeline.run
-```
-
-Verify expected outcomes after running it:
-
-```bash
-python -m tests.verify_mockup
 ```
 
 ## Dependencies
@@ -365,11 +341,9 @@ python dashboard.py --serve --curated-dir data/curated --host 0.0.0.0 --port 877
 
 ```text
 conf/                         Hydra configs
-pipeline/                     S0-S7 validation/evaluation pipeline
+pipeline/                     stage pipeline and judges
 pipeline/judges/              mock and NIM judge implementations
 pipeline/stages/              individual stage implementations
-mockup-data/                  fixture data from feat/mockup-pipeline
 data/curated/                 external curated stage data + dashboard inputs
-artifacts/                    generated dashboard and visualization artifacts
 dashboard.py                  curated stage dashboard builder/server
 ```

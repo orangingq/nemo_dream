@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split", default="train", choices=["train", "validation", "test"])
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--offset", type=int, default=0)
-    parser.add_argument("--output", default="data/curated/prosocial_input.jsonl")
+    parser.add_argument("--output", default="data/curated/stage0.jsonl")
     parser.add_argument(
         "--text-field",
         default="context",
